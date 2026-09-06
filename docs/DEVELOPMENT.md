@@ -12,6 +12,7 @@ src/CraftHarbor.Desktop/    WPFアプリ、日本語UI
 tests/CraftHarbor.Tests/    依存パッケージ不要の自動テスト
 tests/CraftHarbor.UiTests/  WPF画面ナビゲーション・描画テスト
 tests/CraftHarbor.LiveTests/ 実配布サービスへの取得テスト
+tests/CraftHarbor.RealTests/ 明示的オプトインの実サーバー・接続検証
 scripts/package.ps1        portable / standalone ZIP生成
 scripts/generate-icon.ps1  SVGパスから7解像度ICOを再生成
 .github/workflows/ci.yml   Windowsビルド・テスト・成果物保存
@@ -38,6 +39,8 @@ dotnet run --project tests/CraftHarbor.LiveTests -c Release
 ```
 
 このテストはサーバーJAR・MOD・Javaを取得し、Javaの `-version` を実行します。Minecraft本体を稼働させたりEULAへ同意したりはしません。
+
+本体の実起動・入室・復元は別の `RealTests` で検証します。こちらだけはテスト用Node.jsとMineflayerが必要です。通常CIには含めず、[実サーバー検証の手順](REAL_SERVER_VALIDATION.md) に従って、新しい隔離フォルダと明示的なEULAオプトインを使用します。アプリのビルド・実行にNode.jsは不要です。
 
 ## 配布
 
