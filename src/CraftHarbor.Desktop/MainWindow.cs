@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CraftHarbor.Core;
 using Microsoft.Win32;
+using MessageBox = CraftHarbor.Desktop.HarborDialog;
 
 namespace CraftHarbor.Desktop;
 
@@ -35,21 +36,24 @@ public sealed class MainWindow : Window
     {
         if (!runtimes.TryGetValue(p.Id, out var runtime)) runtimes[p.Id] = runtime = new ServerRuntime(); return runtime;
     }
-    private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
+    private static SolidColorBrush Brush(string color) => Theme.Brush(color);
     public MainWindow(string root)
     {
-        store = new HarborStore(root); Style = (Style)FindResource(typeof(Window));
+        store = new HarborStore(root); Theme.Load(root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
         Title = "CraftHarbor — Minecraft Server Control"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var layout = new Grid { Background = Brush("#0D141F") }; layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
         var sidebar = new DockPanel { Background = Brush("#111B29"), Margin = new Thickness(0) }; layout.Children.Add(sidebar);
         var brand = new StackPanel { Margin = new Thickness(22, 28, 18, 20) };
-        brand.Children.Add(new TextBlock { Text = "◈  CraftHarbor", FontSize = 23, FontWeight = FontWeights.Bold, Foreground = Brush("#61DBC4") });
+        var brandRow = new StackPanel { Orientation = Orientation.Horizontal };
+        brandRow.Children.Add(new Image { Source = Theme.Icon, Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) });
+        brandRow.Children.Add(new TextBlock { Text = "CraftHarbor", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = Brush("#61DBC4"), VerticalAlignment = VerticalAlignment.Center }); brand.Children.Add(brandRow);
         brand.Children.Add(new TextBlock { Text = "YOUR WORLDS. YOUR CONTROL.", FontSize = 10, Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 24) });
         brand.Children.Add(Btn("＋ サーバーを追加", AddServer, true)); brand.Children.Add(new TextBlock { Text = "サーバー", Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 12, 0, 8) });
         DockPanel.SetDock(brand, Dock.Top); sidebar.Children.Add(brand);
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.0  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
+        footer.Children.Add(new TextBlock { Text = "v0.1.1  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -111,9 +115,9 @@ public sealed class MainWindow : Window
     private void Navigate(string key)
     {
         if (busy || (mayLeave != null && !mayLeave())) return; mayLeave = null; currentPage = key; page.Children.Clear(); console = null;
-        title.Text = key switch { "java" => "Java ランタイム", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
+        title.Text = key switch { "java" => "Java ランタイム", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
         subtitle.Text = Selected is { } p ? $"{p.Engine.ToUpperInvariant()}  /  Minecraft {p.Version}  /  localhost:{p.Port}" : "サーバー、Java、MOD、ワールドをひとつの場所に。";
-        if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; }
+        if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; } if (key == "appearance") { AppearancePage(); return; }
         if (Selected == null) { Welcome(); return; }
         switch (key) { case "console": ConsolePage(); break; case "launch": LaunchPage(); break; case "mods": ModsPage(); break; case "files": FilesPage(); break; case "backups": BackupsPage(); break; default: Overview(); break; }
     }
@@ -133,6 +137,7 @@ public sealed class MainWindow : Window
     private string? Ask(string label, string initial)
     {
         var dialog = new Window { Owner = this, Title = label, Width = 520, Height = 210, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
+        Theme.Attach(dialog);
         var body = new StackPanel { Margin = new Thickness(24) }; var box = Field(body, label, initial);
         var ok = new Button { Content = "決定", IsDefault = true }; ok.Click += (_, _) => dialog.DialogResult = true; body.Children.Add(ok); dialog.Content = body; box.Focus(); return dialog.ShowDialog() == true ? box.Text.Trim() : null;
     }
@@ -191,10 +196,34 @@ public sealed class MainWindow : Window
         var p = Selected!; var card = Card(page, "起動プロファイル");
         var name = Field(card, "名前", p.Name);
         card.Children.Add(Text("種類（Forge / NeoForge等は、導入済みフォルダのコピー＋カスタム引数で起動）", 12));
-        var engine = new ComboBox { ItemsSource = new[] { "vanilla", "paper", "fabric", "folia", "forge", "neoforge", "quilt", "custom" }, SelectedItem = p.Engine }; card.Children.Add(engine);
+        var engine = new ComboBox { Name = "ServerEngine", ItemsSource = new[] { "vanilla", "paper", "fabric", "folia", "forge", "neoforge", "quilt", "custom" }, SelectedItem = p.Engine }; card.Children.Add(engine);
         var version = Field(card, "Minecraft バージョン", p.Version);
-        var loaderVersion = Field(card, "Fabricローダーバージョン（空欄で最新安定版・パック指定版も入力可能）", p.LoaderVersion);
-        card.Children.Add(AsyncBtn("リリース一覧を取得", async ct => { var versions = await downloads.MinecraftVersions(ct); var chosen = Choose("Minecraft バージョン", versions); if (chosen != null) version.Text = chosen; }));
+        var fabricFields = new StackPanel { Name = "FabricSettings" }; card.Children.Add(fabricFields);
+        var loaderVersion = Field(fabricFields, "Fabricローダーバージョン（空欄で最新安定版・パック指定版も入力可能）", p.Engine == "fabric" ? p.LoaderVersion : "");
+        var versionHint = Text("", 12);
+        var versionButton = AsyncBtn("対応バージョン一覧を取得", async ct =>
+        {
+            var selectedEngine = engine.SelectedItem?.ToString() ?? "custom";
+            var versions = await downloads.ServerVersions(selectedEngine, ct);
+            if (engine.SelectedItem?.ToString() != selectedEngine) { MessageBox.Show(this, "取得中に種類が変わりました。新しい種類で一覧を取得し直してください。"); return; }
+            if (versions.Length == 0) throw new IOException("この種類の対応リリースが見つかりません。");
+            var chosen = Choose($"{selectedEngine} — Minecraft バージョン", versions); if (chosen != null) version.Text = chosen;
+        });
+        versionButton.Name = "ServerVersions"; card.Children.Add(versionButton); card.Children.Add(versionHint);
+        void UpdateEngineFields()
+        {
+            var selectedEngine = engine.SelectedItem?.ToString() ?? "custom";
+            fabricFields.Visibility = selectedEngine == "fabric" ? Visibility.Visible : Visibility.Collapsed;
+            versionButton.IsEnabled = selectedEngine is "vanilla" or "fabric" or "paper" or "folia";
+            versionHint.Text = selectedEngine switch
+            {
+                "fabric" => "Fabric対応のMinecraftリリースを表示します。",
+                "paper" or "folia" => "配布元に存在するMinecraftバージョンを表示します。安定ビルドの有無は導入時に確認します。",
+                "vanilla" => "VanillaのMinecraftリリースを表示します。Fabricローダーの設定は使用しません。",
+                _ => "手動取り込み用です。導入済みサーバーのMinecraftバージョンを入力してください。"
+            };
+        }
+        engine.SelectionChanged += (_, _) => UpdateEngineFields(); UpdateEngineFields();
         var java = Field(card, "java.exe のパス（Java画面からインストールできます）", p.JavaPath);
         card.Children.Add(Btn("java.exe を選択", () => { var file = Pick("Java|java.exe"); if (file != null) java.Text = file; }));
         var min = Field(card, "最小メモリ MB", p.MinMemoryMb.ToString()); var max = Field(card, "最大メモリ MB", p.MaxMemoryMb.ToString()); var port = Field(card, "サーバーポート", p.Port.ToString());
@@ -209,7 +238,7 @@ public sealed class MainWindow : Window
             var draft = new ServerProfile { Name = name.Text.Trim(), MinMemoryMb = int.Parse(min.Text), MaxMemoryMb = int.Parse(max.Text), Port = int.Parse(port.Text), JavaPath = java.Text.Trim() }; draft.Validate();
             _ = SafeFiles.Inside(store.ServerDir(p), jar.Text.Trim());
             p.Name = draft.Name; p.MinMemoryMb = draft.MinMemoryMb; p.MaxMemoryMb = draft.MaxMemoryMb; p.Port = draft.Port; p.JavaPath = draft.JavaPath;
-            p.Engine = engine.SelectedItem?.ToString() ?? "custom"; p.Version = version.Text.Trim(); p.LoaderVersion = loaderVersion.Text.Trim(); p.Jar = jar.Text.Trim(); p.JvmArgs = Lines(jvm.Text); p.LaunchArgs = Lines(args.Text); p.EulaAccepted = eula.IsChecked == true; store.Save(); status.Text = "起動設定を保存しました";
+            p.Engine = engine.SelectedItem?.ToString() ?? "custom"; p.Version = version.Text.Trim(); p.LoaderVersion = p.Engine == "fabric" ? loaderVersion.Text.Trim() : ""; p.Jar = jar.Text.Trim(); p.JvmArgs = Lines(jvm.Text); p.LaunchArgs = Lines(args.Text); p.EulaAccepted = eula.IsChecked == true; store.Save(); status.Text = "起動設定を保存しました";
         }
         var row = new WrapPanel(); row.Children.Add(Btn("設定を保存", () => { Save(); RefreshServers(p); }, true));
         row.Children.Add(AsyncBtn("保存してサーバー本体を導入", async ct =>
@@ -243,6 +272,7 @@ public sealed class MainWindow : Window
     private string? Choose(string heading, IEnumerable<string> values)
     {
         var dialog = new Window { Owner = this, Title = heading, Width = 620, Height = 480, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        Theme.Attach(dialog);
         var body = new DockPanel { Margin = new Thickness(20) }; var list = new ListBox { ItemsSource = values.ToArray() }; var button = new Button { Content = "選択" }; button.Click += (_, _) => { if (list.SelectedItem != null) dialog.DialogResult = true; }; DockPanel.SetDock(button, Dock.Bottom); body.Children.Add(button); body.Children.Add(list); dialog.Content = body; return dialog.ShowDialog() == true ? list.SelectedItem?.ToString() : null;
     }
     private void JavaPage()
@@ -361,6 +391,18 @@ public sealed class MainWindow : Window
         var card = Card(page, "このPCの状態"); var info = new TextBox { Text = Diagnostics.Describe(), IsReadOnly = true, AcceptsReturn = true, Height = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; card.Children.Add(info); card.Children.Add(Btn("更新", () => info.Text = Diagnostics.Describe()));
         var network = Card(page, "TCP疎通チェック"); var host = Field(network, "ホスト名 / IP", "127.0.0.1"); var port = Field(network, "ポート", (Selected?.Port ?? 25565).ToString()); var result = Text(""); network.Children.Add(AsyncBtn("接続をテスト", async _ => { var number = int.Parse(port.Text); if (number is < 1 or > 65535) throw new IOException("ポートが不正です。"); result.Text = await Diagnostics.Probe(host.Text.Trim(), number); })); network.Children.Add(result);
         network.Children.Add(Btn("Windows Firewall設定を開く", () => Open("windowsdefender://network/")));
+    }
+    private void AppearancePage()
+    {
+        var card = Card(page, "自分に合った明るさで");
+        card.Children.Add(Text("テーマを切り替えると、画面全体にすぐ反映します。次回起動時も選択を保持します。"));
+        var row = new WrapPanel();
+        row.Children.Add(Btn("ダーク", () => { Theme.Apply("Dark", true); status.Text = "ダークモードを保存しました"; }));
+        row.Children.Add(Btn("ライト", () => { Theme.Apply("Light", true); status.Text = "ライトモードを保存しました"; }));
+        card.Children.Add(row);
+        card.Children.Add(Text("入力欄・選択リスト・チェックボックス・スクロールバー・アプリ内ダイアログに適用します。Windowsのファイル選択画面など、OSが提供する画面はWindows側の表示設定に従います。", 12));
+        card.Children.Add(new Image { Source = Theme.Icon, Width = 96, Height = 96, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 12) });
+        card.Children.Add(Text("CraftHarbor  •  ブロックと灯台を組み合わせたアプリアイコン", 12));
     }
     private void HelpPage()
     {

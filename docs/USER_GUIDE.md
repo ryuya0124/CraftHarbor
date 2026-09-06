@@ -1,5 +1,11 @@
 # 操作ガイド
 
+## 表示設定（v0.1.1）
+
+左下の「表示設定」でダーク／ライトを選びます。画面・入力欄・選択リスト・アプリ内確認ダイアログへ即時反映し、`data/settings.json` に保存します。サーバー再起動は不要です。Windowsのファイル・フォルダ選択画面はOSのテーマに従います。
+
+起動設定のFabricローダーバージョン欄はFabric選択時だけ表示します。Vanillaなど別の種類で保存した場合、Fabric指定は解除します。Minecraft候補一覧は選択中の種類に合わせて取得し、Forge / NeoForge / Quilt / customでは導入済み環境のバージョンを手入力してください。
+
 ## 1. インストール
 
 Windows x64用ZIPを展開してください。portableは.NET 10 Desktop Runtime x64を使う小型版、standaloneは.NET込みの版です。JavaはMinecraftのために別途必要で、アプリ自身の実行には使いません。ZIP内のDLL・設定ファイルも一緒に保存します。起動ファイルは `CraftHarbor.exe` です。

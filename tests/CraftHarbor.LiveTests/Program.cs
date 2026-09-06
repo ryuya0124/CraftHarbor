@@ -7,6 +7,16 @@ var progress = new Progress<string>(s => { });
 try
 {
     var versions = await downloads.MinecraftVersions(deadline.Token); Console.WriteLine($"PASS Mojang releases: {versions.Length}, latest {versions[0]}");
+    if (args.Contains("--versions-only"))
+    {
+        foreach (var engine in new[] { "vanilla", "fabric", "paper", "folia" })
+        {
+            var candidates = await downloads.ServerVersions(engine, deadline.Token);
+            if (candidates.Length == 0) throw new Exception(engine + " returned no versions");
+            Console.WriteLine($"PASS {engine} version candidates: {candidates.Length}, first {candidates[0]}");
+        }
+        return;
+    }
     foreach (var engine in new[] { "vanilla", "paper", "fabric" })
     {
         var p = new ServerProfile { Engine = engine, Version = "1.21.1" }; var dir = Path.Combine(root, engine); Directory.CreateDirectory(dir);

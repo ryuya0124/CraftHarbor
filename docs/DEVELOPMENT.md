@@ -13,6 +13,7 @@ tests/CraftHarbor.Tests/    依存パッケージ不要の自動テスト
 tests/CraftHarbor.UiTests/  WPF画面ナビゲーション・描画テスト
 tests/CraftHarbor.LiveTests/ 実配布サービスへの取得テスト
 scripts/package.ps1        portable / standalone ZIP生成
+scripts/generate-icon.ps1  SVGパスから7解像度ICOを再生成
 .github/workflows/ci.yml   Windowsビルド・テスト・成果物保存
 docs/                      利用・運用・開発文書
 ```

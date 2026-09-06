@@ -75,6 +75,26 @@ await Test("Mrpack skips client files and applies server overrides", async () =>
 });
 await Test("Mrpack refuses occupied server", async () => { using var d = new Downloads(); await ThrowsAsync<IOException>(() => d.ImportMrpack(Temp("sample.mrpack"), Temp("pack"), new Progress<string>(), default)); });
 
+await Test("Version candidates use selected engine and exclude snapshots", async () =>
+{
+    var requests = new List<string>();
+    using var d = new Downloads(new FakeHttp(request =>
+    {
+        var url = request.RequestUri!.AbsoluteUri; requests.Add(url);
+        var json = url.Contains("version_manifest") ? """{"versions":[{"id":"1.21.1","type":"release"},{"id":"24w01a","type":"snapshot"},{"id":"1.20.1","type":"release"},{"id":"1.12.2","type":"release"}]}"""
+            : url.Contains("fabricmc") ? """[{"version":"1.21.1","stable":true},{"version":"24w01a","stable":false}]"""
+            : url.EndsWith("/paper") ? """{"versions":{"1.21":["1.21.1","1.21.1"],"1.20":["1.20.1"]}}"""
+            : """{"versions":{"1.20":["1.20.1"]}}""";
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
+    }));
+    Check((await d.ServerVersions("vanilla", default)).SequenceEqual(new[] { "1.21.1", "1.20.1", "1.12.2" }));
+    Check((await d.ServerVersions("fabric", default)).SequenceEqual(new[] { "1.21.1" }));
+    Check((await d.ServerVersions("paper", default)).SequenceEqual(new[] { "1.21.1", "1.20.1" }));
+    Check((await d.ServerVersions("folia", default)).SequenceEqual(new[] { "1.20.1" }));
+    var count = requests.Count;
+    foreach (var kind in new[] { "forge", "neoforge", "quilt", "custom" }) await ThrowsAsync<NotSupportedException>(() => d.ServerVersions(kind, default));
+    Check(requests.Count == count, "Manual engines must not fetch Vanilla candidates");
+});
 Console.WriteLine($"RESULT {passed} passed, {failed} failed");
 Directory.Delete(root, true); Environment.ExitCode = failed == 0 ? 0 : 1;
 

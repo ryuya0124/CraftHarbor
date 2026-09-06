@@ -10,7 +10,7 @@ public sealed class Downloads : IDisposable
     {
         http = handler == null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromMinutes(15);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.0 (https://github.com/ryuya0124/CraftHarbor)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.1 (https://github.com/ryuya0124/CraftHarbor)");
     }
     public async Task<JsonNode> Json(string url, CancellationToken ct = default) => JsonNode.Parse(await http.GetStringAsync(url, ct)) ?? throw new IOException("空のAPI応答です。");
     public static void ValidateUrl(string url)
@@ -49,6 +49,27 @@ public sealed class Downloads : IDisposable
         finally { if (File.Exists(tmp)) File.Delete(tmp); }
     }
     public async Task<string[]> MinecraftVersions(CancellationToken ct) => (await Json("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", ct))["versions"]!.AsArray().Where(n => (string?)n!["type"] == "release").Select(n => (string)n!["id"]!).ToArray();
+    public async Task<string[]> ServerVersions(string engine, CancellationToken ct)
+    {
+        if (engine == "vanilla") return await MinecraftVersions(ct);
+        IEnumerable<string> supported;
+        switch (engine)
+        {
+            case "fabric":
+                var games = await Json("https://meta.fabricmc.net/v2/versions/game", ct);
+                supported = games.AsArray().Where(n => (bool?)n!["stable"] == true).Select(n => n!["version"]!.ToString());
+                break;
+            case "paper": case "folia":
+                var project = await Json($"https://fill.papermc.io/v3/projects/{engine}", ct);
+                supported = project["versions"]!.AsObject().SelectMany(group => group.Value!.AsArray()).Select(n => n!.ToString());
+                break;
+            default:
+                throw new NotSupportedException("この種類は導入済みサーバーに合わせてMinecraftバージョンを入力してください。");
+        }
+        // Use Mojang release ordering, excluding snapshots and duplicate provider entries.
+        var available = supported.ToHashSet(StringComparer.Ordinal);
+        return (await MinecraftVersions(ct)).Where(available.Contains).ToArray();
+    }
     public async Task<int> InstallServer(ServerProfile p, string directory, IProgress<string> progress, CancellationToken ct)
     {
         var version = Uri.EscapeDataString(p.Version);

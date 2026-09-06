@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using MessageBox = CraftHarbor.Desktop.HarborDialog;
 
 namespace CraftHarbor.Desktop;
 public partial class App : Application
