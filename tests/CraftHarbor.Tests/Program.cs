@@ -9,6 +9,7 @@ using CraftHarbor.Core;
 
 if (args.Contains("--fake-server"))
 {
+    Console.OutputEncoding = new UTF8Encoding(false); Console.InputEncoding = new UTF8Encoding(false);
     Console.WriteLine("Done (0.1s)! For help, type help"); Console.Error.WriteLine("stderr-is-captured");
     string? command;
     while ((command = Console.ReadLine()) != null) { Console.WriteLine("echo:" + command); if (command == "stop") return; }
@@ -54,8 +55,9 @@ await Test("Managed child: stdout, stderr, command, graceful stop, restart", asy
         runtime.Start(profile, dir, Temp("process-logs"));
         var deadline = DateTime.UtcNow.AddSeconds(10); while (!runtime.Ready && DateTime.UtcNow < deadline) await Task.Delay(25);
         Check(runtime.Ready && runtime.Running); Throws<InvalidOperationException>(() => runtime.Start(profile, dir, Temp("process-logs")));
-        await runtime.SendAsync("list"); await ThrowsAsync<ArgumentException>(() => runtime.SendAsync("list\nstop")); await runtime.StopAsync();
+        await runtime.SendAsync("list"); await runtime.SendAsync("日本語コマンド"); await ThrowsAsync<ArgumentException>(() => runtime.SendAsync("list\nstop")); await runtime.StopAsync();
         Check(runtime.ExitCode == 0 && runtime.History.Any(x => x.Contains("echo:list")) && runtime.History.Any(x => x.Contains("stderr-is-captured")));
+        Check(runtime.History.Any(x => x.Contains("echo:日本語コマンド")));
         runtime.Start(profile, dir, Temp("process-logs")); await runtime.StopAsync(); Check(runtime.ExitCode == 0);
     }
     finally { if (runtime.Running) runtime.Kill(); while (runtime.Busy) await Task.Delay(25); }
@@ -127,6 +129,92 @@ await Test("Persistent Windows lock: restore fails within bound and retains both
     var stage = Directory.GetDirectories(root, "persistent-lock.restore-*").Single();
     Check(File.ReadAllText(Path.Combine(stage, "level.dat")) == "backup-state");
     Check(File.Exists(archive));
+});
+await Test("Empty preset clears configuration but preserves world and backup", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("empty-preset")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
+    files.SavePreset("empty"); files.SaveConfiguration("config/test.json", "{}"); files.SaveConfiguration("world/level.dat", "world");
+    var backup = files.ApplyPreset("empty.zip"); Check(File.Exists(backup)); Check(!Directory.Exists(Path.Combine(store.ServerDir(p), "config"))); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "world/level.dat")) == "world");
+}));
+await Test("Configuration invalid JSON and traversal preserve original/history", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("config-failure")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
+    files.SaveConfiguration("config/a.json", "{}"); Throws<System.Text.Json.JsonException>(() => files.SaveConfiguration("config/a.json", "invalid")); Throws<IOException>(() => files.SaveConfiguration("../escape.txt", "bad"));
+    Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/a.json")) == "{}"); Check(!SafeFiles.Files(Path.Combine(store.Root, "file-history")).Any());
+    files.SaveConfiguration("config/a.json", "{\"ok\":true}"); Check(File.ReadAllText(SafeFiles.Files(Path.Combine(store.Root, "file-history")).Single()) == "{}");
+}));
+await Test("JAR duplicate batch rejects before copying, toggle collision preserves both", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("jar-failures")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
+    var a = Temp("a.jar"); var b = Temp("b.jar"); File.WriteAllText(a, "a"); File.WriteAllText(b, "b"); files.AddJars("mods", [a]);
+    Throws<IOException>(() => files.AddJars("mods", [b, a])); Check(!File.Exists(Path.Combine(store.ServerDir(p), "mods/b.jar")));
+    files.ToggleJar("mods", "a.jar"); files.AddJars("mods", [a]); Throws<IOException>(() => files.ToggleJar("mods", "a.jar.disabled"));
+    Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "mods/a.jar.disabled")) == "a"); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "mods/a.jar")) == "a");
+    Throws<IOException>(() => files.AddJars("world", [a])); Throws<IOException>(() => files.ToggleJar("mods", "../a.jar"));
+}));
+await Test("Invalid preset root file cannot replace configuration or world", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("invalid-preset")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
+    files.SaveConfiguration("config/a.txt", "keep"); Directory.CreateDirectory(store.PresetDir(p));
+    using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "invalid.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("mods").Open()); w.Write("file, not directory"); }
+    Throws<IOException>(() => files.ApplyPreset("invalid.zip")); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/a.txt")) == "keep");
+}));
+await Test("Mrpack accepts empty directories created by MOD screen", async () =>
+{
+    var target = Temp("pack-empty-folders"); Directory.CreateDirectory(Path.Combine(target, "mods"));
+    using var d = new Downloads(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) }));
+    await d.ImportMrpack(Temp("sample.mrpack"), target, new Progress<string>(), default); Check(File.Exists(Path.Combine(target, "mods/test.jar")));
+});
+await Test("Mrpack missing dependency metadata cannot promote downloaded content", async () =>
+{
+    var archive = Temp("bad-deps.mrpack"); using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create)) { using (var w = new StreamWriter(zip.CreateEntry("modrinth.index.json").Open())) w.Write("""{"formatVersion":1,"game":"minecraft","files":[]}"""); using (var w = new StreamWriter(zip.CreateEntry("overrides/config/probe.txt").Open())) w.Write("must not promote"); }
+    var target = Temp("bad-deps-target"); using var d = new Downloads(); await ThrowsAsync<IOException>(() => d.ImportMrpack(archive, target, new Progress<string>(), default)); Check(!SafeFiles.Files(target).Any());
+});
+await Test("Required pinned dependencies resolve before parent and exclude optional", async () =>
+{
+    var requested = new List<string>();
+    using var d = new Downloads(new FakeHttp(request =>
+    {
+        var url = request.RequestUri!.AbsolutePath; requested.Add(url);
+        var json = url.EndsWith("/version/dep1") ? """{"id":"dep1","project_id":"dependency","game_versions":["1.21.1"],"loaders":["fabric"],"dependencies":[]}"""
+            : """[{"id":"parent1","project_id":"parent","version_type":"release","game_versions":["1.21.1"],"loaders":["fabric"],"dependencies":[{"version_id":"dep1","dependency_type":"required"},{"project_id":"optional","dependency_type":"optional"}]}]""";
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
+    }));
+    var releases = await d.ResolveMods("parent", "1.21.1", "fabric", default);
+    Check(releases.Select(r => r["id"]!.ToString()).SequenceEqual(new[] { "dep1", "parent1" })); Check(requested.Count == 2);
+});
+await Test("Pinned dependency wrong loader rejected", async () =>
+{
+    using var d = new Downloads(new FakeHttp(request => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(request.RequestUri!.AbsolutePath.EndsWith("/version/dep1")
+        ? """{"id":"dep1","project_id":"dependency","game_versions":["1.21.1"],"loaders":["forge"],"dependencies":[]}"""
+        : """[{"id":"parent1","project_id":"parent","version_type":"release","game_versions":["1.21.1"],"loaders":["fabric"],"dependencies":[{"version_id":"dep1","dependency_type":"required"}]}]""") }));
+    await ThrowsAsync<IOException>(() => d.ResolveMods("parent", "1.21.1", "fabric", default));
+});
+await Test("Multi-MOD hash failure leaves target untouched", async () =>
+{
+    using var d = new Downloads(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) }));
+    JsonNode Release(string name, string digest) => System.Text.Json.JsonSerializer.SerializeToNode(new { files = new[] { new { primary = true, filename = name, url = "https://example.com/mod.jar", hashes = new { sha512 = digest } } } })!;
+    var target = Temp("failed-mod-batch"); Directory.CreateDirectory(target); File.WriteAllText(Path.Combine(target, "existing.jar"), "keep");
+    await ThrowsAsync<IOException>(() => d.InstallMods([Release("one.jar", Convert.ToHexString(SHA512.HashData(payload))), Release("two.jar", new string('0', 128))], target, new Progress<string>(), default));
+    Check(Directory.GetFiles(target).Length == 1 && File.ReadAllText(Path.Combine(target, "existing.jar")) == "keep");
+});
+await Test("Cancelled mrpack leaves empty destination unchanged", async () =>
+{
+    using var cancel = new CancellationTokenSource(); cancel.Cancel(); using var d = new Downloads();
+    var target = Temp("cancel-pack"); Directory.CreateDirectory(Path.Combine(target, "mods"));
+    await ThrowsAsync<OperationCanceledException>(() => d.ImportMrpack(Temp("sample.mrpack"), target, new Progress<string>(), cancel.Token)); Check(!SafeFiles.Files(target).Any());
+});
+await Test("Staged promotion refuses late destination file", () => Sync(() =>
+{
+    var stage = Temp("late-stage"); var target = Temp("late-target"); Directory.CreateDirectory(stage); Directory.CreateDirectory(target);
+    File.WriteAllText(Path.Combine(stage, "new.txt"), "new"); File.WriteAllText(Path.Combine(target, "late.txt"), "keep");
+    Throws<IOException>(() => SafeFiles.PromoteIntoEmptyDirectory(stage, target)); Check(File.ReadAllText(Path.Combine(target, "late.txt")) == "keep" && File.Exists(Path.Combine(stage, "new.txt")));
+}));
+await Test("Paper and Folia search plugin facets; Fabric searches mods", async () =>
+{
+    var queries = new List<string>(); using var d = new Downloads(new FakeHttp(request => { queries.Add(Uri.UnescapeDataString(request.RequestUri!.Query)); return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"hits\":[]}") }; }));
+    foreach (var engine in new[] { "paper", "folia", "fabric" }) await d.SearchMods("test", "1.21.1", engine, default);
+    Check(queries[0].Contains("project_type:plugin") && queries[1].Contains("project_type:plugin") && queries[2].Contains("project_type:mod"));
 });
 Console.WriteLine($"RESULT {passed} passed, {failed} failed");
 Directory.Delete(root, true); Environment.ExitCode = failed == 0 ? 0 : 1;

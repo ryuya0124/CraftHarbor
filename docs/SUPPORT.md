@@ -1,6 +1,6 @@
 # 対応表
 
-| 対象 | v0.1.0 | 備考 |
+| 対象 | v0.1.3 | 備考 |
 |---|---|---|
 | Windows x64 | 対応 | Windows 11 x64で検証。.NET 10対応OSが必要 |
 | ARM64 / Linux / macOS | 対象外 | ネイティブUIはWPF |
@@ -11,9 +11,9 @@
 | 独自サーバーJAR | 手動設定 | Javaプロセス、stdinのstop対応が前提 |
 | Bedrock / Docker / WSL | 対象外 | 専用実行形式・ホスト管理なし |
 | Java 8 / 11 / 17 / 21 / 25 | Temurin JRE取得・割当 | 21の取得・実行を実サービスで検証 |
-| MOD・Plugin JAR | ローカル追加・切替 | ホットリロードなし |
-| Modrinth MOD | 検索・必須依存解決・取得 | 最新正式対応版、既存MODの自動更新なし |
-| Modrinth mrpack | 制限付き対応 | 空サーバー、CDN・配置先制限、ローダー別途 |
+| MOD・Plugin JAR | ローカル追加・切替 | sparkでFabric/Forge/NeoForge、ChunkyでPaperを実検証。ホットリロードなし |
+| Modrinth MOD / Plugin | 検索・必須依存解決・取得 | Paper/Foliaはpluginsへ配置。既存MODの自動更新なし |
+| Modrinth mrpack | 制限付き対応 | Adrenaline 26.4.2+mc1.21.1.fabricを実検証。CDN・配置先制限、ローダー別途 |
 | CurseForge zip | 自動解決なし | 作者が提供する導入済みサーバーをコピー |
 | プリセット | 対応 | mods / plugins / configの実体ZIP |
 | バックアップ | 手動・停止中 | 復元20GB/10万エントリ上限 |

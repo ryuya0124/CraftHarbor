@@ -146,6 +146,30 @@ public static class SafeFiles
         }
         return old;
     }
+    public static void PromoteIntoEmptyDirectory(string stage, string target)
+    {
+        // Keep any pre-existing tree intact until the prepared tree is in place.
+        if (Files(target).Any()) throw new IOException("空の新規サーバーを使用してください。");
+        var old = target + ".empty-" + Guid.NewGuid().ToString("N");
+        var exists = Directory.Exists(target);
+        if (exists) MoveDirectoryWithRetry(target, old);
+        try
+        {
+            // Recheck after rename so content arriving during preparation is retained.
+            if (exists && Files(old).Any()) throw new IOException("取り込み先が処理中に変更されました。");
+            MoveDirectoryWithRetry(stage, target);
+        }
+        catch (Exception promotionError)
+        {
+            if (exists)
+            {
+                try { MoveDirectoryWithRetry(old, target); }
+                catch (Exception rollbackError) { throw new AggregateException($"取り込みと巻き戻しに失敗しました。元データ: {old} / 準備済み: {stage}", promotionError, rollbackError); }
+            }
+            throw;
+        }
+        // Retain the empty old tree; never recursively delete a concurrently changed tree.
+    }
     private static void MoveDirectoryWithRetry(string source, string destination)
     {
         // Windows can temporarily deny renames while recently extracted files are
