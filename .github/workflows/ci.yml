@@ -1,0 +1,31 @@
+name: Windows build and tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release build
+        run: dotnet build src/CraftHarbor.Desktop -c Release
+      - name: Core tests
+        run: dotnet run --project tests/CraftHarbor.Tests -c Release
+      - name: WPF layout tests
+        run: dotnet run --project tests/CraftHarbor.UiTests -c Release -- artifacts/preview.png
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CraftHarbor-win-x64
+          path: artifacts/packages/*
+          retention-days: 14
