@@ -5,3 +5,4 @@ artifacts/
 *.user
 data/
 *.partial
+**/node_modules/

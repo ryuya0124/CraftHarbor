@@ -95,6 +95,39 @@ await Test("Version candidates use selected engine and exclude snapshots", async
     foreach (var kind in new[] { "forge", "neoforge", "quilt", "custom" }) await ThrowsAsync<NotSupportedException>(() => d.ServerVersions(kind, default));
     Check(requests.Count == count, "Manual engines must not fetch Vanilla candidates");
 });
+await Test("Real Windows directory lock: restore waits, then succeeds without data loss", async () =>
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var target = Temp("locked-world"); Directory.CreateDirectory(target);
+    File.WriteAllText(Path.Combine(target, "level.dat"), "backup-state");
+    var archive = SafeFiles.Snapshot(target, Temp("locked-backups"));
+    File.WriteAllText(Path.Combine(target, "level.dat"), "current-state");
+    using var handle = new FileStream(Path.Combine(target, "level.dat"), FileMode.Open, FileAccess.Read, FileShare.Read);
+    var restore = Task.Run(() => SafeFiles.Restore(archive, target));
+    await Task.Delay(300);
+    if (restore.IsFaulted) await restore;
+    Check(!restore.IsCompleted, "Restore must wait while the directory is locked");
+    handle.Dispose();
+    var previous = await restore.WaitAsync(TimeSpan.FromSeconds(6));
+    Check(File.ReadAllText(Path.Combine(target, "level.dat")) == "backup-state");
+    Check(File.ReadAllText(Path.Combine(previous, "level.dat")) == "current-state");
+});
+await Test("Persistent Windows lock: restore fails within bound and retains both states", async () =>
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var target = Temp("persistent-lock"); Directory.CreateDirectory(target);
+    var level = Path.Combine(target, "level.dat"); File.WriteAllText(level, "backup-state");
+    var archive = SafeFiles.Snapshot(target, Temp("persistent-backups"));
+    File.WriteAllText(level, "current-state");
+    using var handle = new FileStream(level, FileMode.Open, FileAccess.Read, FileShare.Read);
+    var restore = Task.Run(() => SafeFiles.Restore(archive, target));
+    try { await restore.WaitAsync(TimeSpan.FromSeconds(8)); throw new Exception("Locked restore unexpectedly succeeded"); }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    Check(File.ReadAllText(level) == "current-state");
+    var stage = Directory.GetDirectories(root, "persistent-lock.restore-*").Single();
+    Check(File.ReadAllText(Path.Combine(stage, "level.dat")) == "backup-state");
+    Check(File.Exists(archive));
+});
 Console.WriteLine($"RESULT {passed} passed, {failed} failed");
 Directory.Delete(root, true); Environment.ExitCode = failed == 0 ? 0 : 1;
 

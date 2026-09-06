@@ -4,9 +4,10 @@
 |---|---|---|
 | Windows x64 | 対応 | Windows 11 x64で検証。.NET 10対応OSが必要 |
 | ARM64 / Linux / macOS | 対象外 | ネイティブUIはWPF |
-| Vanilla / Paper / Fabric | 自動取得・起動管理 | 1.21.1の取得を実サービスで検証 |
+| Vanilla / Paper / Fabric | 自動取得・起動管理 | 1.21.1で実起動・入室・保存・復元を確認。Fabric API入りも確認 |
 | Folia | 自動取得 | 安定ビルドのみ。実サービス取得は未検証 |
-| Forge / NeoForge / Quilt | 導入済みフォルダの手動取り込み | JARまたはJava引数ファイル |
+| Forge / NeoForge | 導入済みフォルダの手動取り込み | 1.21.1のForge 52.1.16 / NeoForge 21.1.250で引数ファイル起動・入室・保存・復元を確認。自動インストーラーUIは未実装 |
+| Quilt | 導入済みフォルダの手動取り込み | JARまたはJava引数ファイル。本体実行は未検証 |
 | 独自サーバーJAR | 手動設定 | Javaプロセス、stdinのstop対応が前提 |
 | Bedrock / Docker / WSL | 対象外 | 専用実行形式・ホスト管理なし |
 | Java 8 / 11 / 17 / 21 / 25 | Temurin JRE取得・割当 | 21の取得・実行を実サービスで検証 |

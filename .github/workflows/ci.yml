@@ -19,6 +19,8 @@ jobs:
         run: dotnet build src/CraftHarbor.Desktop -c Release
       - name: Core tests
         run: dotnet run --project tests/CraftHarbor.Tests -c Release
+      - name: Compile opt-in real-server tests (do not run servers)
+        run: dotnet build tests/CraftHarbor.RealTests -c Release
       - name: WPF layout tests
         run: dotnet run --project tests/CraftHarbor.UiTests -c Release -- artifacts/preview.png
       - name: Package

@@ -130,10 +130,39 @@ public static class SafeFiles
         try { ExtractZip(archive, stage); }
         catch { Directory.Delete(stage, true); throw; }
         var exists = Directory.Exists(target);
-        if (exists) Directory.Move(target, old);
-        try { Directory.Move(stage, target); }
-        catch { if (exists) Directory.Move(old, target); throw; }
+        if (exists) MoveDirectoryWithRetry(target, old);
+        try { MoveDirectoryWithRetry(stage, target); }
+        catch (Exception restoreError)
+        {
+            if (exists)
+            {
+                try { MoveDirectoryWithRetry(old, target); }
+                catch (Exception rollbackError)
+                {
+                    throw new AggregateException($"復元と巻き戻しに失敗しました。データは削除していません。元データ: {old} / 展開済み: {stage}", restoreError, rollbackError);
+                }
+            }
+            throw;
+        }
         return old;
+    }
+    private static void MoveDirectoryWithRetry(string source, string destination)
+    {
+        // Windows can temporarily deny renames while recently extracted files are
+        // being scanned or a process is releasing handles. Retry only lock/access
+        // errors, for a bounded interval, without deleting either directory.
+        var deadline = Environment.TickCount64 + 3000;
+        for (var attempt = 0; ; attempt++)
+        {
+            try { Directory.Move(source, destination); return; }
+            catch (Exception ex) when (OperatingSystem.IsWindows()
+                && ex is IOException or UnauthorizedAccessException
+                && (ex.HResult & 0xffff) is 5 or 32 or 33
+                && Environment.TickCount64 < deadline)
+            {
+                Thread.Sleep(Math.Min(50 * (attempt + 1), 250));
+            }
+        }
     }
     public static string SetProperty(string text, string key, string value)
     {

@@ -6,9 +6,9 @@
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の `CraftHarbor-0.1.1-win-x64-portable.zip` を展開し、`CraftHarbor.exe` を実行してください。軽量版には **.NET 10 Desktop Runtime x64** が必要です。.NETがないPCでは `standalone.zip` を選べます。どちらも管理者権限不要です。
+[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の `CraftHarbor-0.1.2-win-x64-portable.zip` を展開し、`CraftHarbor.exe` を実行してください。軽量版には **.NET 10 Desktop Runtime x64** が必要です。.NETがないPCでは `standalone.zip` を選べます。どちらも管理者権限不要です。
 
-**v0.1.1 / プレビュー**。Fabric専用設定の表示不具合を修正し、ダーク／ライトの表示設定と新アイコンを追加しました。実装済み機能は下表のとおりです。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
+**v0.1.2 / プレビュー**。実サーバー検証で見つかったWindowsの一時ロックによる復元失敗を修正しました。Vanilla・Paper・Fabric・Forge・NeoForgeの起動、テスト用クライアント入室、保存、再起動、復元を確認しています。[検証条件と結果](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
 
 ## できること
 
