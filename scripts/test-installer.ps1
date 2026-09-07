@@ -58,7 +58,11 @@ $request.ParentStartedTicks = $parent.StartTime.ToUniversalTime().Ticks
 $elapsed = [Diagnostics.Stopwatch]::StartNew()
 $request | ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding utf8
 $run = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $helper),'-Manifest',('"{0}"' -f $manifest)) -WindowStyle Hidden -Wait -PassThru
-if ($run.ExitCode -ne 0 -or (Get-Content -LiteralPath ($manifest + '.result.json') -Raw | ConvertFrom-Json).Status -ne 'success') { throw 'Update helper failed to install verified update' }
+if ($run.ExitCode -ne 0 -or (Get-Content -LiteralPath ($manifest + '.result.json') -Raw | ConvertFrom-Json).Status -ne 'success') {
+    Get-Content -LiteralPath ($manifest + '.result.json')
+    if (Test-Path -LiteralPath ($manifest + '.install.log')) { Get-Content -LiteralPath ($manifest + '.install.log') -Tail 35 }
+    throw "Update helper failed to install verified update (exit $($run.ExitCode))"
+}
 if ($elapsed.Elapsed.TotalSeconds -lt 4 -or -not $parent.HasExited) { throw 'Update helper did not wait for parent exit' }
 CheckData
 Write-Output 'PASS detached update helper waits for parent, rejects tampering and applies verified installer with data preserved'
