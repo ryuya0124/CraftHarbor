@@ -10,7 +10,7 @@ public sealed class Downloads : IDisposable
     {
         http = handler == null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromMinutes(15);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.3 (https://github.com/ryuya0124/CraftHarbor)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.4 (https://github.com/ryuya0124/CraftHarbor)");
     }
     public async Task<JsonNode> Json(string url, CancellationToken ct = default) => JsonNode.Parse(await http.GetStringAsync(url, ct)) ?? throw new IOException("空のAPI応答です。");
     public static void ValidateUrl(string url)
