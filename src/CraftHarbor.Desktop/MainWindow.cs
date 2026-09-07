@@ -53,7 +53,7 @@ public sealed class MainWindow : Window
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
         footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.3  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(new TextBlock { Text = "v0.1.4  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -171,6 +171,8 @@ public sealed class MainWindow : Window
         command.KeyDown += (_, e) => { if (e.Key == Key.Enter && !busy) { e.Handled = true; _ = Run(Send); } };
         var controls = new WrapPanel(); controls.Children.Add(AsyncBtn("送信 ↵", Send, true));
         foreach (var cmd in new[] { "list", "save-all", "whitelist list" }) controls.Children.Add(AsyncBtn(cmd, async _ => await runtime.SendAsync(cmd)));
+        if (File.Exists(Path.Combine(store.ServerDir(p), "automodpack", "automodpack-server.json")))
+            foreach (var cmd in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" }) controls.Children.Add(AsyncBtn(cmd, async _ => await runtime.SendAsync(cmd)));
         page.Children.Add(controls); page.Children.Add(Text("画面は最大2,000行。完全な出力は logs に保存します。停止操作はCraftHarborが起動したプロセスだけが対象です。", 12));
     }
     private void Tick()
@@ -301,6 +303,12 @@ public sealed class MainWindow : Window
     private void ModsPage()
     {
         var p = Selected!; var root = store.ServerDir(p);
+        var sync = Card(page, "AutoModpack • クライアントへMOD構成を同期");
+        var autoConfig = Path.Combine(root, "automodpack", "automodpack-server.json");
+        sync.Children.Add(Text(File.Exists(autoConfig) ? "AutoModpackのサーバー設定を検出しました。設定ファイル画面で編集できます。" : "対応するAutoModpackをサーバーとクライアントへ導入します。初回起動後に生成されるサーバー設定を編集できます。"));
+        sync.Children.Add(Text("同期対象はAutoModpackのsyncedFilesと配布専用フォルダで管理します。MOD・設定変更後はコンソールの automodpack generate で同期データを再生成してください。", 12));
+        sync.Children.Add(Text("通常の構成プリセットはmods / plugins / configのみです。automodpack配下の配布設定・専用ファイルは含みません。サーバー全体バックアップには含まれます。", 12));
+        var syncRow = new WrapPanel(); syncRow.Children.Add(Btn("設定ファイルへ", () => Navigate("files"))); syncRow.Children.Add(Btn("コンソールへ", () => Navigate("console"))); syncRow.Children.Add(Btn("AutoModpack公式ガイド", () => Open("https://github.com/Skidamek/AutoModpack/blob/main/docs/quick-start.mdx"))); sync.Children.Add(syncRow);
         var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedItem = p.Engine is "paper" or "folia" ? "plugins" : "mods" }; local.Children.Add(folder);
         var list = new ListBox { Height = 150 }; local.Children.Add(list);
         string Target() => Path.Combine(root, folder.SelectedItem.ToString()!);
@@ -345,7 +353,9 @@ public sealed class MainWindow : Window
     {
         var p = Selected!; var root = store.ServerDir(p); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
         if (p.Engine == "paper") card.Children.Add(Text("Paperの既存ワールドの難易度は、コンソールで difficulty hard などを送信して変更してください。設定ファイルだけでは既存ワールドへ反映されない場合があります。", 12));
+        var autoConfig = Path.Combine(root, "automodpack", "automodpack-server.json");
         var candidates = Directory.EnumerateFiles(root).Concat(SafeFiles.Files(Path.Combine(root, "config"))).Concat(SafeFiles.Files(Path.Combine(root, "plugins")));
+        if (File.Exists(autoConfig)) candidates = new[] { SafeFiles.Inside(root, "automodpack/automodpack-server.json") }.Concat(candidates);
         var paths = candidates.Where(f => new[] { ".properties", ".json", ".toml", ".yml", ".yaml", ".txt", ".conf" }.Contains(Path.GetExtension(f).ToLowerInvariant()) && new FileInfo(f).Length < 1024 * 1024).Take(500).Select(f => Path.GetRelativePath(root, f)).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
         var list = new ComboBox { ItemsSource = paths, SelectedIndex = 0 }; card.Children.Add(list);
         var editor = new TextBox { AcceptsReturn = true, AcceptsTab = true, Height = 340, FontFamily = new FontFamily("Consolas"), FontSize = 13, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };

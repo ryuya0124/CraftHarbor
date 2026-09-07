@@ -73,6 +73,20 @@ internal static class Program
             }
             if (window.Icon == null || Theme.Icon.Width != 256) throw new Exception("App icon is missing or low resolution");
             Console.WriteLine("PASS multi-resolution app icon");
+            var serverDir = store.ServerDir(p); var autoDir = Path.Combine(serverDir, "automodpack"); Directory.CreateDirectory(autoDir);
+            File.WriteAllText(Path.Combine(autoDir, "automodpack-server.json"), "{\"modpackName\":\"before\"}");
+            File.WriteAllText(Path.Combine(autoDir, "automodpack-client.json"), "{\"testPrivateData\":true}");
+            navigate.Invoke(window, ["files"]); Layout();
+            var configs = Descendants(content).OfType<ComboBox>().Single();
+            if (!configs.Items.Cast<string>().Contains(Path.Combine("automodpack", "automodpack-server.json")) || configs.Items.Cast<string>().Any(x => x.EndsWith("automodpack-client.json"))) throw new Exception("AutoModpack configuration scope incorrect");
+            configs.SelectedItem = Path.Combine("automodpack", "automodpack-server.json");
+            Descendants(content).OfType<TextBox>().Single().Text = "{\"modpackName\":\"日本語同期テスト\"}";
+            Descendants(content).OfType<Button>().Single(b => b.Content?.ToString() == "ファイルを保存").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (!File.ReadAllText(Path.Combine(autoDir, "automodpack-server.json")).Contains("日本語同期テスト") || !SafeFiles.Files(Path.Combine(root, "file-history")).Any()) throw new Exception("AutoModpack save/history failed");
+            navigate.Invoke(window, ["console"]); Layout();
+            foreach (var command in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" })
+                if (!Descendants(content).OfType<Button>().Any(b => b.Content?.ToString() == command)) throw new Exception("Missing AutoModpack command");
+            Console.WriteLine("PASS AutoModpack config discovery/save/history and console commands");
             navigate.Invoke(window, ["overview"]); Layout();
             typeof(MainWindow).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
             Layout();

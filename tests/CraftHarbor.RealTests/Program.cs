@@ -125,6 +125,19 @@ try
             await downloads.InstallMods(mods, Path.Combine(directory, "mods"), progress, deadline.Token);
         }
         using var runtime = new ServerRuntime();
+        var autoModpack = args.Contains("--automodpack");
+        if (autoModpack)
+        {
+            if (engine != "fabric") throw new ArgumentException("AutoModpack test fixture uses Fabric");
+            var release = await downloads.Json("https://api.modrinth.com/v2/version/ig9vuxA6", deadline.Token);
+            await downloads.InstallMods([release], Path.Combine(directory, "mods"), progress, deadline.Token);
+            SafeFiles.AtomicWrite(Path.Combine(directory, "automodpack", "automodpack-server.json"), """{"modpackName":"CraftHarbor isolated sync","bindAddress":"127.0.0.1","bindPort":0,"requireAutoModpackOnClient":false,"nagUnModdedClients":false,"selfUpdater":false,"syncedFiles":["/mods/*.jar","/config/harbor-sync.json"]}""");
+            SafeFiles.AtomicWrite(Path.Combine(directory, "config", "harbor-sync.json"), "{\"message\":\"同期対象テスト\"}");
+            var hostProbe = new TcpListener(IPAddress.Loopback, 0); hostProbe.Start(); var hostPort = ((IPEndPoint)hostProbe.LocalEndpoint).Port; hostProbe.Stop();
+            var configPath = Path.Combine(directory, "automodpack", "automodpack-server.json");
+            var config = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(configPath))!; config["bindPort"] = hostPort; SafeFiles.AtomicWrite(configPath, config.ToJsonString());
+            Record(engine, "automodpack-installed", new { version = "4.0.6", hostPort, clientSynchronizationTested = false });
+        }
         async Task Boot(string phase)
         {
             var start = Stopwatch.StartNew(); runtime.Start(profile, directory, Path.Combine(root, "logs", engine));
@@ -133,7 +146,7 @@ try
             await WaitFor(() => runtime.Ready, runtime, engine + " startup", 240);
             if (!IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(e => e.Port == port && IPAddress.IsLoopback(e.Address))) throw new IOException("Expected loopback listener missing");
             if (IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(e => e.Port == port && !IPAddress.IsLoopback(e.Address))) throw new IOException("Unexpected public test listener");
-            Record(engine, phase + "-ready", new { elapsedSeconds = start.Elapsed.TotalSeconds, memoryMb = runtime.WorkingSet / 1048576d, status = await ServerStatus(port, deadline.Token) });
+            Record(engine, phase + "-ready", new { elapsedSeconds = start.Elapsed.TotalSeconds, memoryMb = runtime.WorkingSet / 1048576d, status = autoModpack ? (JsonElement?)null : await ServerStatus(port, deadline.Token) });
         }
         async Task Stop(string phase)
         {
@@ -145,12 +158,21 @@ try
         try
         {
             await Boot("initial");
+            if (autoModpack)
+            {
+                await Command(runtime, "automodpack", "AutoModpack");
+                await Command(runtime, "automodpack generate", "Modpack generated");
+                var manifest = Path.Combine(directory, "automodpack", "host-modpack", "automodpack-content.json");
+                await WaitFor(() => File.Exists(manifest) && File.ReadAllText(manifest).Contains("harbor-sync.json"), runtime, "AutoModpack manifest generation", 120);
+                Record(engine, "automodpack-server-manifest-pass", new { configurationIncluded = true, clientSynchronizationTested = false });
+            }
             await Command(runtime, "say 日本語コンソール確認", "日本語コンソール確認");
             if (engine == "fabric" && !runtime.History.Any(s => s.Contains("fabric-api"))) throw new IOException("Fabric API was not loaded");
             await Command(runtime, "gamerule spawnRadius 0", "spawnRadius");
             await Command(runtime, "setworldspawn 2 -60 2", "world spawn");
             await Command(runtime, "setblock 0 -60 0 minecraft:diamond_block", "Changed the block");
-            await VerifyClient(profile, runtime, "initial");
+            if (!autoModpack) await VerifyClient(profile, runtime, "initial");
+            else Record(engine, "client-checks-not-passed", "The raw status probe disconnected in earlier runs; this run verifies server management only, not client synchronization.");
             await Command(runtime, "save-all flush", "Saved the game");
             await Stop("initial");
             var levelFile = Path.Combine(directory, "world", "level.dat");
@@ -158,16 +180,16 @@ try
             var archive = SafeFiles.Snapshot(directory, Path.Combine(root, "backups", engine));
             Record(engine, "backup-created", new { file = archive, bytes = new FileInfo(archive).Length });
             await Boot("restart");
-            await VerifyClient(profile, runtime, "restart");
+            if (!autoModpack) await VerifyClient(profile, runtime, "restart");
             await Command(runtime, "setblock 0 -60 0 minecraft:gold_block", "Changed the block");
             await Command(runtime, "save-all flush", "Saved the game");
             await Stop("restart");
             var previous = SafeFiles.Restore(archive, directory);
             Record(engine, "backup-restored", new { previous });
             await Boot("restored");
-            await VerifyClient(profile, runtime, "restored");
+            if (!autoModpack) await VerifyClient(profile, runtime, "restored");
             await Stop("restored");
-            Record(engine, "PASS");
+            Record(engine, autoModpack ? "SERVER_ONLY_PASS" : "PASS");
         }
         finally
         {
@@ -175,7 +197,7 @@ try
             while (runtime.Busy) await Task.Delay(100);
         }
     }
-    Record("all", "PASS");
+    Record("all", args.Contains("--automodpack") ? "SERVER_ONLY_PASS" : "PASS");
 }
 catch (Exception ex) { Record("all", "FAIL", ex.ToString()); Environment.ExitCode = 1; }
 finally
