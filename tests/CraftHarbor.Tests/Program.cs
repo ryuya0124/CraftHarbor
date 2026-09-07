@@ -263,6 +263,12 @@ await Test("Updater checksum requires exact asset and verifies downloaded size/c
     Throws<IOException>(() => ReleaseUpdates.Verify(path,new string('0',64),new FileInfo(path).Length));
     Throws<IOException>(() => ReleaseUpdates.Verify(path,hash,1));
 }));
+await Test("Rename updater prefers new name and keeps previous-name releases readable", () => Sync(() =>
+{
+    const string json = "[{\"tag_name\":\"v0.1.10\",\"draft\":false,\"assets\":[{\"name\":\"CraftHelm-0.1.10-win-x64-setup.exe\",\"id\":1,\"size\":2048},{\"name\":\"CraftHarbor-0.1.10-win-x64-setup.exe\",\"id\":2,\"size\":2048},{\"name\":\"SHA256SUMS.txt\",\"id\":3}]}]";
+    Check(ReleaseUpdates.Select(json, new Version(0, 1, 9))?.InstallerId == 1);
+    Check(ReleaseUpdates.Select(json.Replace("CraftHelm-0.1.10", "other-0.1.10"), new Version(0, 1, 9))?.InstallerId == 2);
+}));
 await Test("Configuration invalid JSON and traversal preserve original/history", () => Sync(() =>
 {
     var store = new HarborStore(Temp("config-failure")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);

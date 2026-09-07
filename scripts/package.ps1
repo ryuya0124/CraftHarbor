@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.9', [switch]$WithInstaller)
+param([string]$Version = '0.1.10', [switch]$WithInstaller)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Push-Location $projectRoot
@@ -16,7 +16,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Publish failed: $kind" }
         Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md'), (Join-Path $projectRoot 'LICENSE') -Destination $target -Force
         Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $target -Recurse -Force
-        $zipPath = Join-Path $packageRoot "CraftHarbor-$Version-win-x64-$kind.zip"
+        $zipPath = Join-Path $packageRoot "CraftHelm-$Version-win-x64-$kind.zip"
         Compress-Archive -Path (Join-Path $target '*') -DestinationPath $zipPath -Force
     }
     if ($WithInstaller) {
@@ -28,8 +28,10 @@ try {
         $compiler = & (Join-Path $PSScriptRoot 'setup-installer-compiler.ps1')
         & $compiler "/DAppVersion=$Version" (Join-Path $projectRoot 'installer\CraftHarbor.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+        # Old installations discover this byte-identical compatibility asset.
+        Copy-Item -LiteralPath (Join-Path $packageRoot "CraftHelm-$Version-win-x64-setup.exe") -Destination (Join-Path $packageRoot "CraftHarbor-$Version-win-x64-setup.exe") -Force
     }
-    $hashLines = Get-ChildItem -LiteralPath $packageRoot -Filter "CraftHarbor-$Version-*" | Where-Object { $_.Extension -in '.zip', '.exe' } | ForEach-Object {
+    $hashLines = Get-ChildItem -LiteralPath $packageRoot | Where-Object { ($_.Name -like "CraftHelm-$Version-*" -or $_.Name -like "CraftHarbor-$Version-*") -and $_.Extension -in '.zip', '.exe' } | ForEach-Object {
         $digest = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
         '{0}  {1}' -f $digest.Hash.ToLowerInvariant(), $_.Name
     }

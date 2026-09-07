@@ -1,8 +1,8 @@
 # AutoModpackとの併用
 
-AutoModpackはサーバー側の構成をクライアントへ配布するMODです。同期・証明書の確認・クライアント側の適用はAutoModpackが担当し、CraftHarborはサーバー側の導入・設定編集・コンソール・バックアップを担当します。
+AutoModpackはサーバー側の構成をクライアントへ配布するMODです。同期・証明書の確認・クライアント側の適用はAutoModpackが担当し、CraftHelmはサーバー側の導入・設定編集・コンソール・バックアップを担当します。
 
-## CraftHarborでの操作
+## CraftHelmでの操作
 
 1. 対応するMinecraft・ローダーのAutoModpackを、サーバーと各プレイヤーのクライアントへ導入します。サーバー側はMOD画面のModrinth検索またはJAR追加を利用できます。
 2. サーバーを起動して設定を生成し、停止します。「設定ファイル」で `automodpack/automodpack-server.json` を編集します。JSON検査と保存前の履歴が適用されます。
@@ -10,7 +10,7 @@ AutoModpackはサーバー側の構成をクライアントへ配布するMODで
 4. MODや同期する設定を変更したら、停止中に保存して再起動するか、対象を確認して `automodpack generate` で配布データを再生成します。`automodpack config reload` も送信できます。
 5. AutoModpack入りクライアントから接続し、配布元の証明書・構成を確認してインストールを進めます。必要な再起動はAutoModpackの表示に従ってください。
 
-ゲームサーバーが起動中でも、CraftHarborのコンソール欄からコマンドを送れます。`list`、`say こんにちは`、`save-all` などを入力してEnterまたは「送信」を押します。対象は左側で選択した、**CraftHarborが起動したサーバーだけ**です。別アプリから起動した既存Javaの標準入力へ後から接続する機能はありません。
+ゲームサーバーが起動中でも、CraftHelmのコンソール欄からコマンドを送れます。`list`、`say こんにちは`、`save-all` などを入力してEnterまたは「送信」を押します。対象は左側で選択した、**CraftHelmが起動したサーバーだけ**です。別アプリから起動した既存Javaの標準入力へ後から接続する機能はありません。
 
 ## 同期範囲とプリセット
 
@@ -22,9 +22,9 @@ v0.1.5の通常プリセットにはautomodpack/automodpack-server.jsonも含ま
 
 ## ネットワークとバージョン
 
-ゲーム接続先とMODダウンロード先は同じとは限りません。別ポートを使う構成では、そちらへの経路も必要です。CraftHarborはFirewallやルーターを自動変更しません。`bindAddress` はPC側の待受、クライアントへ伝えるアドレスは到達先の設定であり、用途が違います。
+ゲーム接続先とMODダウンロード先は同じとは限りません。別ポートを使う構成では、そちらへの経路も必要です。CraftHelmはFirewallやルーターを自動変更しません。`bindAddress` はPC側の待受、クライアントへ伝えるアドレスは到達先の設定であり、用途が違います。
 
-今回参照したリリース4.0.6には `bindPort`、`addressToSend`、`portToSend`、`requireMagicPackets` があります。GitHubのmainブランチの説明には `connectionMode` や `advertisedEndpointHost` など、異なる設定名があります。導入版が生成したJSONと、その版の説明に従ってください。CraftHarborは独自の固定スキーマでこれらを上書きしません。
+今回参照したリリース4.0.6には `bindPort`、`addressToSend`、`portToSend`、`requireMagicPackets` があります。GitHubのmainブランチの説明には `connectionMode` や `advertisedEndpointHost` など、異なる設定名があります。導入版が生成したJSONと、その版の説明に従ってください。CraftHelmは独自の固定スキーマでこれらを上書きしません。
 
 ## 検証範囲
 

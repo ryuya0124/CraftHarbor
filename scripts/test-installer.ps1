@@ -1,13 +1,13 @@
-param([string]$Version = '0.1.9')
+param([string]$Version = '0.1.10')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
-$setup = Join-Path $projectRoot "artifacts\packages\CraftHarbor-$Version-win-x64-setup.exe"
+$setup = Join-Path $projectRoot "artifacts\packages\CraftHelm-$Version-win-x64-setup.exe"
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3AF1289-728F-4FB3-A791-EC7DDD897C14}_is1'
 if (Test-Path -LiteralPath $key) { throw 'CraftHarbor is already installed; run this test on a clean user account.' }
 $testId = [guid]::NewGuid().ToString('N')
 $testDirectory = Join-Path $projectRoot "artifacts\installer-test-$testId"
 $group = "CraftHarbor Installer Test $testId"
-$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) "$group\CraftHarbor.lnk"
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) "$group\CraftHelm.lnk"
 $dataDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CraftHarbor\data'
 New-Item -ItemType Directory -Force -Path $testDirectory, $dataDirectory | Out-Null
 $marker = Join-Path $dataDirectory "installer-preserve-$testId.txt"
@@ -32,10 +32,20 @@ try {
     if (Test-Path -LiteralPath $key) { throw 'Blocked install registered an application' }
 } finally { $mutex.Dispose() }
 Write-Output 'PASS running-app install refusal (no process terminated)'
+# Real previous-name upgrade, including replacement of old Start menu links.
+$oldSetup = Join-Path $testDirectory 'previous-0.1.9.exe'
+Invoke-WebRequest -Uri 'https://github.com/ryuya0124/CraftHarbor/releases/download/v0.1.9/CraftHarbor-0.1.9-win-x64-setup.exe' -OutFile $oldSetup
+if ((Get-FileHash -LiteralPath $oldSetup -Algorithm SHA256).Hash -ne '99ACCD08CE7C258B9DC2C77F24067D82C3B631700BD5EC8435D3FD100A2E14BA') { throw 'Previous release checksum mismatch' }
+if ((InvokeInstaller $oldSetup @('/LANG=japanese', ('/DIR="{0}"' -f $testDirectory), '/GROUP="CraftHarbor"')) -ne 0) { throw 'Previous version installation failed' }
+$oldShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'CraftHarbor\CraftHarbor.lnk'
+if (-not (Test-Path -LiteralPath $oldShortcut)) { throw 'Previous-name shortcut missing' }
+CheckData
 for ($pass = 0; $pass -lt 2; $pass++) {
     if ((InvokeInstaller $setup ($installOptions + ('/LOG="{0}"' -f (Join-Path $testDirectory "install-$pass.log")))) -ne 0) { throw 'Install/upgrade failed' }
     $installed = Get-ItemProperty -LiteralPath $key
     if (-not (Test-Path -LiteralPath (Join-Path $testDirectory 'coreclr.dll'))) { throw 'Installer must deploy runtime without launch-time extraction' }
+    if ($installed.DisplayName -ne 'CraftHelm') { throw 'Application display name was not renamed' }
+    if (Test-Path -LiteralPath $oldShortcut) { throw 'Old application shortcut was not replaced' }
     if ($installed.DisplayVersion -ne $Version) { throw 'Uninstall registration version mismatch' }
     $shell = New-Object -ComObject WScript.Shell
     if ($shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $testDirectory 'CraftHarbor.exe')) { throw 'Start menu target mismatch' }
