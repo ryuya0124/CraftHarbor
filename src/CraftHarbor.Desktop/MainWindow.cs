@@ -16,6 +16,9 @@ namespace CraftHarbor.Desktop;
 public sealed class MainWindow : Window
 {
     private readonly HarborStore store;
+    private readonly UpdateManager updater;
+    private TextBlock? updateStatus;
+    private bool restartForUpdate;
     private readonly Downloads downloads = new();
     private readonly Dictionary<string, ServerRuntime> runtimes = [];
     private readonly ListBox servers = new();
@@ -40,7 +43,7 @@ public sealed class MainWindow : Window
     public MainWindow(string root) : this(new HarborStore(root)) { }
     public MainWindow(HarborStore loadedStore)
     {
-        store = loadedStore; Theme.Load(store.Root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
+        store = loadedStore; updater = new UpdateManager(store.Root); updater.Changed += () => { if (updateStatus != null) updateStatus.Text = updater.Status; }; Theme.Load(store.Root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
         Title = "CraftHarbor — Minecraft Server Control"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var layout = new Grid { Background = Brush("#0D141F") }; layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
         var sidebar = new DockPanel { Background = Brush("#111B29"), Margin = new Thickness(0) }; layout.Children.Add(sidebar);
@@ -53,8 +56,8 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(brand, Dock.Top); sidebar.Children.Add(brand);
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
-        footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.7  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(Btn("表示設定", () => Navigate("appearance"))); footer.Children.Add(Btn("アプリの更新", () => Navigate("updates")));
+        footer.Children.Add(new TextBlock { Text = "v0.1.8  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -70,7 +73,7 @@ public sealed class MainWindow : Window
         var main = new DockPanel { Margin = new Thickness(30, 26, 30, 16) }; Grid.SetColumn(main, 1); layout.Children.Add(main);
         var header = new StackPanel(); header.Children.Add(title); header.Children.Add(subtitle); DockPanel.SetDock(header, Dock.Top); main.Children.Add(header);
         var nav = new WrapPanel();
-        foreach (var (label, key) in new[] { ("概要", "overview"), ("コンソール", "console"), ("起動設定", "launch"), ("MOD / パック", "mods"), ("設定ファイル", "files"), ("バックアップ", "backups") }) nav.Children.Add(Btn(label, () => Navigate(key)));
+        foreach (var (label, key) in new[] { ("概要", "overview"), ("コンソール", "console"), ("起動設定", "launch"), ("サーバー設定", "properties"), ("MOD / パック", "mods"), ("設定ファイル", "files"), ("バックアップ", "backups") }) nav.Children.Add(Btn(label, () => Navigate(key)));
         DockPanel.SetDock(nav, Dock.Top); main.Children.Add(nav);
         var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
         var cancel = Btn("処理をキャンセル", () => operation?.Cancel()); DockPanel.SetDock(cancel, Dock.Right); bottom.Children.Add(cancel); bottom.Children.Add(status);
@@ -115,12 +118,12 @@ public sealed class MainWindow : Window
     private bool Confirm(string message) => MessageBox.Show(this, message, "CraftHarbor", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
     private void Navigate(string key)
     {
-        if (busy || (mayLeave != null && !mayLeave())) return; mayLeave = null; currentPage = key; page.Children.Clear(); console = null;
+        if (busy || (mayLeave != null && !mayLeave())) return; mayLeave = null; currentPage = key; page.Children.Clear(); console = null; updateStatus = null;
         title.Text = key switch { "java" => "Java ランタイム", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
         subtitle.Text = Selected is { } p ? $"{p.Engine.ToUpperInvariant()}  /  Minecraft {p.Version}  /  localhost:{p.Port}" : "サーバー、Java、MOD、ワールドをひとつの場所に。";
-        if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; } if (key == "appearance") { AppearancePage(); return; }
+        if (key == "updates") { UpdatesPage(); return; } if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; } if (key == "appearance") { AppearancePage(); return; }
         if (Selected == null) { Welcome(); return; }
-        switch (key) { case "console": ConsolePage(); break; case "launch": LaunchPage(); break; case "mods": ModsPage(); break; case "files": FilesPage(); break; case "backups": BackupsPage(); break; default: Overview(); break; }
+        switch (key) { case "console": ConsolePage(); break; case "launch": LaunchPage(); break; case "mods": ModsPage(); break; case "properties": PropertiesPage(); break; case "files": FilesPage(); break; case "backups": BackupsPage(); break; default: Overview(); break; }
     }
     private void Welcome()
     {
@@ -353,9 +356,64 @@ public sealed class MainWindow : Window
             MessageBox.Show(this, "取り込み完了。必要ローダーのバージョン:\n" + deps + "\n起動設定からローダー本体を導入してください。Fabricはパック指定版を保存しました。", "MODパック"); Refresh();
         }));
     }
+    private void PropertiesPage()
+    {
+        var p = Selected!; var path = SafeFiles.Inside(store.ServerDir(p), "server.properties");
+        string? original = File.Exists(path) ? File.ReadAllText(path) : null;
+        var values = new ServerProperties(original ?? $"motd=A Minecraft Server\nmax-players=20\ndifficulty=easy\ngamemode=survival\nforce-gamemode=false\nonline-mode=true\nwhite-list=false\nview-distance=10\nsimulation-distance=10\nserver-port={p.Port}\n").Values;
+        var intro = Card(page, "サーバー設定 • server.properties");
+        intro.Children.Add(Text("停止中に保存できます。変更した項目だけを反映し、変更前のファイルは履歴へ残します。適用には通常、サーバーの再起動が必要です。"));
+        intro.Children.Add(Text("このバージョンのファイルにある項目を表示します。ワールド生成設定は既存ワールドを作り直しません。Paperの既存ワールドの難易度はコンソールで変更してください。", 12));
+        intro.Children.Add(Text($"現在の起動ポートは {p.Port}。接続ポートをこの画面で変更すると起動設定にも反映します。", 12));
+        var search = Field(intro, "項目を検索", ""); search.Name = "PropertySearch";
+        var readers = new Dictionary<string, Func<string>>(); var initial = new Dictionary<string, string>(values);
+        var rows = new List<(FrameworkElement Row, string Search)>();
+        foreach (var group in values.Select(kv => (Field: PropertyFields.For(kv.Key, kv.Value), kv.Value)).GroupBy(x => x.Field.Group))
+        {
+            var card = Card(page, group.Key);
+            foreach (var (field, value) in group)
+            {
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 12) }; card.Children.Add(row);
+                row.Children.Add(Text(field.Label, 14)); row.Children.Add(Text(field.Key, 11));
+                if (field.Kind == "bool" && value is "true" or "false")
+                {
+                    var control = new CheckBox { Content = "有効", IsChecked = value == "true", Tag = field.Key }; row.Children.Add(control);
+                    readers[field.Key] = () => control.IsChecked == true ? "true" : "false";
+                }
+                else if (field.Options != null)
+                {
+                    var labels = new Dictionary<string, string> { ["peaceful"] = "ピースフル", ["easy"] = "イージー", ["normal"] = "ノーマル", ["hard"] = "ハード", ["survival"] = "サバイバル", ["creative"] = "クリエイティブ", ["adventure"] = "アドベンチャー", ["spectator"] = "スペクテイター" };
+                    var choices = field.Options.Concat([value]).Distinct().Select(x => new KeyValuePair<string, string>(x, labels.GetValueOrDefault(x, x))).ToArray();
+                    var control = new ComboBox { ItemsSource = choices, DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = value, Tag = field.Key }; row.Children.Add(control);
+                    readers[field.Key] = () => control.SelectedValue?.ToString() ?? value;
+                }
+                else if (field.Kind == "password")
+                {
+                    var control = new PasswordBox { Password = value, Tag = field.Key, Padding = new Thickness(8) }; control.SetResourceReference(Control.BackgroundProperty, "Input"); control.SetResourceReference(Control.ForegroundProperty, "Ink"); row.Children.Add(control); readers[field.Key] = () => control.Password;
+                }
+                else
+                {
+                    var control = new TextBox { Text = value, Tag = field.Key }; row.Children.Add(control); readers[field.Key] = () => control.Text;
+                    if (field.Kind == "number") row.Children.Add(Text($"範囲: {field.Min}〜{field.Max}", 11));
+                }
+                rows.Add((row, field.Key + " " + field.Label + " " + field.Group));
+            }
+        }
+        search.TextChanged += (_, _) => { foreach (var row in rows) row.Row.Visibility = row.Search.Contains(search.Text, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed; };
+        bool Dirty() => readers.Any(kv => kv.Value() != initial[kv.Key]);
+        mayLeave = () => !Dirty() || Confirm("サーバー設定の未保存の編集を破棄しますか？");
+        intro.Children.Add(Btn("サーバー設定を保存", () =>
+        {
+            var changes = readers.Where(kv => original == null || kv.Value() != initial[kv.Key]).ToDictionary(kv => kv.Key, kv => kv.Value());
+            original = new ServerFiles(store, p, Runtime(p)).SaveServerProperties(original, changes);
+            foreach (var key in readers.Keys) initial[key] = readers[key]();
+            status.Text = "サーバー設定を保存しました（反映には再起動が必要な場合があります）";
+        }, true));
+        intro.Children.Add(Btn("テキスト編集へ", () => Navigate("files")));
+    }
     private void FilesPage()
     {
-        var p = Selected!; var root = store.ServerDir(p); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
+        var p = Selected!; var root = store.ServerDir(p); page.Children.Add(Btn("server.propertiesをGUIで設定", () => Navigate("properties"))); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
         if (p.Engine == "paper") card.Children.Add(Text("Paperの既存ワールドの難易度は、コンソールで difficulty hard などを送信して変更してください。設定ファイルだけでは既存ワールドへ反映されない場合があります。", 12));
         card.Children.Add(Text("FTBのSNBT、JSON5/JSONC、CFG、KubeJSのJS、CraftTweakerのZSにも対応。JSON以外の構文・値は各MOD側で検証されます。最大500件・1ファイル1MB未満。", 12));
         var paths = ModConfigurations.EditableFiles(root).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
@@ -408,10 +466,33 @@ public sealed class MainWindow : Window
         card.Children.Add(Btn("日本語ドキュメント（GitHub）", () => Open("https://github.com/ryuya0124/CraftHarbor/tree/main/docs")));
         card.Children.Add(Btn("データフォルダ", () => Open(store.Root))); card.Children.Add(Text("保存先: " + store.Root, 12));
     }
+    public void BeginUpdateChecks() => updater.Start();
+    private void UpdatesPage()
+    {
+        var card = Card(page, "GitHub Releasesから更新");
+        card.Children.Add(Text("現在のバージョン: " + typeof(App).Assembly.GetName().Version!.ToString(3)));
+        card.Children.Add(Text("起動後と24時間ごとに更新を確認し、ファイルをダウンロード・検証します。アプリを通常終了したあとに適用するため、稼働中のサーバーを自動停止しません。", 12));
+        var enabled = new CheckBox { Content = "更新を自動取得し、アプリ終了後に適用", IsChecked = updater.Enabled };
+        enabled.Click += (_, _) => { try { updater.SetEnabled(enabled.IsChecked == true); } catch (Exception ex) { Error(ex); } }; card.Children.Add(enabled);
+        updateStatus = Text(updater.Status); card.Children.Add(updateStatus);
+        card.Children.Add(AsyncBtn("今すぐ更新を確認", async _ => await updater.CheckAsync()));
+        card.Children.Add(Btn("更新してアプリを再起動", () =>
+        {
+            if (!updater.IsReady) { status.Text = "更新のダウンロードが完了していません。"; return; }
+            restartForUpdate = true; Close(); restartForUpdate = false;
+        }, true));
+        card.Children.Add(Btn("リリース情報", () => Open("https://github.com/ryuya0124/CraftHarbor/releases")));
+        card.Children.Add(Text("プレビューリリースも対象です。ZIP版は確認のみで、インストーラーから更新できます。通信に失敗してもサーバー管理は継続できます。", 12));
+    }
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (busy || runtimes.Values.Any(r => r.Busy || r.Running)) { e.Cancel = true; MessageBox.Show(this, "処理の完了と、CraftHarborから起動したサーバーの停止を確認してから閉じてください。", "CraftHarbor"); return; }
         if (mayLeave != null && !mayLeave()) { e.Cancel = true; return; }
-        timer.Stop(); foreach (var runtime in runtimes.Values) runtime.Dispose(); downloads.Dispose();
+        if (updater.IsReady && (updater.Enabled || restartForUpdate))
+        {
+            try { updater.Schedule(restartForUpdate); }
+            catch (Exception ex) { e.Cancel = true; Error(ex); return; }
+        }
+        updater.Dispose(); timer.Stop(); foreach (var runtime in runtimes.Values) runtime.Dispose(); downloads.Dispose();
     }
 }

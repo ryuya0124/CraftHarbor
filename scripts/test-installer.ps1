@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.7')
+param([string]$Version = '0.1.8')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $setup = Join-Path $projectRoot "artifacts\packages\CraftHarbor-$Version-win-x64-setup.exe"
@@ -42,6 +42,26 @@ for ($pass = 0; $pass -lt 2; $pass++) {
     CheckData
     Write-Output "PASS install/upgrade $pass, Start menu and uninstall registration, data preserved"
 }
+# Exercise the same detached helper used by automatic updates, with a simulated exiting parent.
+$helper = Join-Path $projectRoot "artifacts\helper-$testId.ps1"
+Copy-Item -LiteralPath (Join-Path $testDirectory 'UpdateHelper.ps1') -Destination $helper
+$manifest = Join-Path $projectRoot "artifacts\helper-$testId.json"
+$parent = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 2') -WindowStyle Hidden -PassThru
+$request = @{ Installer=$setup; SHA256=('0' * 64); Size=(Get-Item -LiteralPath $setup).Length; ParentId=$parent.Id; ParentStartedTicks=$parent.StartTime.ToUniversalTime().Ticks; TargetDirectory=$testDirectory; Restart=$false }
+$request | ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding utf8
+$run = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $helper),'-Manifest',('"{0}"' -f $manifest)) -WindowStyle Hidden -Wait -PassThru
+if ($run.ExitCode -eq 0 -or (Get-Content -LiteralPath ($manifest + '.result.json') -Raw | ConvertFrom-Json).Status -ne 'failed') { throw 'Update helper accepted tampered installer' }
+$request.SHA256 = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash
+$parent = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 4') -WindowStyle Hidden -PassThru
+$request.ParentId = $parent.Id
+$request.ParentStartedTicks = $parent.StartTime.ToUniversalTime().Ticks
+$elapsed = [Diagnostics.Stopwatch]::StartNew()
+$request | ConvertTo-Json | Set-Content -LiteralPath $manifest -Encoding utf8
+$run = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $helper),'-Manifest',('"{0}"' -f $manifest)) -WindowStyle Hidden -Wait -PassThru
+if ($run.ExitCode -ne 0 -or (Get-Content -LiteralPath ($manifest + '.result.json') -Raw | ConvertFrom-Json).Status -ne 'success') { throw 'Update helper failed to install verified update' }
+if ($elapsed.Elapsed.TotalSeconds -lt 4 -or -not $parent.HasExited) { throw 'Update helper did not wait for parent exit' }
+CheckData
+Write-Output 'PASS detached update helper waits for parent, rejects tampering and applies verified installer with data preserved'
 $uninstaller = Join-Path $testDirectory 'unins000.exe'
 $mutex = [Threading.Mutex]::new($false, 'Local\CraftHarbor.Desktop')
 try {

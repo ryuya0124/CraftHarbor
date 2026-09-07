@@ -1,16 +1,19 @@
 # ◈ CraftHarbor
 
+> **開発途中のプレビュー版です。利用は自己責任でお願いします。** 不具合による停止やデータ損失の可能性があります。重要なワールドは別の場所にもバックアップし、まずテスト用サーバーで確認してください。すべてのMOD・バージョンへの対応は保証しません。
+
+
 **サーバーのための、小さな港。** Windows向けのMinecraft Java Editionサーバー管理アプリです。C# / WPFで作り、ブラウザエンジンやNode.jsを同梱しません。
 
 ![CraftHarbor overview](docs/images/overview.png)
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の **`CraftHarbor-0.1.7-win-x64-setup.exe`** を実行してください。管理者権限不要、.NETランタイム同梱です。スタートメニューにCraftHarborとアンインストール項目を登録します。[インストール・更新・削除の手順](docs/INSTALLATION.md)。
+[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の **`CraftHarbor-0.1.8-win-x64-setup.exe`** を実行してください。管理者権限不要、.NETランタイム同梱です。スタートメニューにCraftHarborとアンインストール項目を登録します。[インストール・更新・削除の手順](docs/INSTALLATION.md)。
 
 ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が必要、`standalone.zip` はランタイム同梱です。
 
-**v0.1.7 / プレビュー**。起動時にローディング画面を先に表示し、バックグラウンドでサーバー一覧を読み込みます。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
+**v0.1.8 / プレビュー**。[server.propertiesのGUI設定](docs/SERVER_PROPERTIES.md)と[GitHub Releasesによる自動更新](docs/UPDATES.md)に対応しました。起動時にローディング画面を先に表示し、バックグラウンドでサーバー一覧を読み込みます。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
 
 ## できること
 
@@ -26,6 +29,8 @@ ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が�
 | Modrinth | MC・ローダーで絞り込むMOD検索、必須依存解決、導入予定確認、SHA512検証 |
 | MODパック | `.mrpack` の必須サーバーファイルとoverrides。Fabric指定版の引継ぎ |
 | プリセット | JAR・MOD設定をZIP保存。既存設定を維持／同名設定を復元。切替前に全体バックアップ |
+| サーバー設定 | server.propertiesをGUI編集。真偽値・選択肢・数値検証・秘密値マスク、未知の項目とコメントを保持 |
+| アプリ更新 | 起動後・24時間ごとにGitHub Releasesを確認し、検証済み更新を通常終了後に適用 |
 | 設定 | JSON / TOML / YAML / properties / txt / confを編集、JSON構文検証、旧版保存 |
 | バックアップ | 停止中の全体ZIP、ステージング復元、復元前フォルダの保存 |
 | 情報 | OS・論理CPU数・メモリ指標・ディスク空き・LAN IPv4・TCP待受・疎通 |
@@ -51,7 +56,7 @@ ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が�
 
 ## データとプライバシー
 
-既定保存先は WindowsのDocuments配下 `CraftHarbor/data`。ソースやEXEと別に保存するため、アプリ更新でワールドが消えません。`CRAFTHARBOR_DATA` 環境変数で変更できます。アカウント登録、テレメトリー、常駐Webサーバーはありません。ダウンロード・検索時に該当配布APIへ接続します。
+既定保存先は WindowsのDocuments配下 `CraftHarbor/data`。ソースやEXEと別に保存するため、アプリ更新でワールドが消えません。`CRAFTHARBOR_DATA` 環境変数で変更できます。アカウント登録、テレメトリー、常駐Webサーバーはありません。ダウンロード・検索時に該当配布APIへ接続します。インストーラー版では自動更新が既定で有効で、起動後・24時間ごとにGitHubへ接続します。「アプリの更新」で無効にできます。
 
 ## ビルド
 

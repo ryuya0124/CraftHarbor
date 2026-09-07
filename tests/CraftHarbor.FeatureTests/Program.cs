@@ -37,7 +37,7 @@ internal static class Program
         root = Path.GetFullPath(args[0]);
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any()) throw new IOException("Use a NEW empty test root");
         Directory.CreateDirectory(root);
-        var app = new App(); app.InitializeComponent(); // Never App.Run/OnStartup or the user's data directory.
+        var app = new Application(); app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/CraftHarbor;component/Styles.xaml") }); app.ShutdownMode = ShutdownMode.OnExplicitShutdown; // Never production startup.
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         var frame = new DispatcherFrame();
         var task = Run(args);
@@ -160,8 +160,20 @@ internal static class Program
                 try
                 {
                     var settings = File.ReadAllText(Path.Combine(dir, "server.properties"));
-                    foreach (var (key, value) in new[] { ("motd", "設定反映テスト"), ("difficulty", "hard"), ("gamemode", "adventure"), ("force-gamemode", "true"), ("max-players", "3"), ("spawn-monsters", "false") }) settings = SafeFiles.SetProperty(settings, key, value);
-                    await Edit("server.properties", settings);
+                    foreach (var (key, value) in new[] { ("motd", "before"), ("difficulty", "easy"), ("gamemode", "survival"), ("force-gamemode", "false"), ("max-players", "20"), ("spawn-monsters", "true") }) settings = SafeFiles.SetProperty(settings, key, value);
+                    SafeFiles.AtomicWrite(Path.Combine(dir, "server.properties"), settings);
+                    Navigate("properties");
+                    foreach (var (key, value) in new[] { ("motd", "設定反映テスト"), ("difficulty", "hard"), ("gamemode", "adventure"), ("force-gamemode", "true"), ("max-players", "3"), ("spawn-monsters", "false") })
+                    {
+                        var control = Tree(content).OfType<FrameworkElement>().Single(x => x.Tag?.ToString() == key);
+                        if (control is TextBox text) text.Text = value;
+                        else if (control is ComboBox combo) combo.SelectedValue = value;
+                        else if (control is CheckBox check) check.IsChecked = value == "true";
+                        else throw new IOException("Unexpected properties control");
+                    }
+                    await Click("サーバー設定を保存"); Navigate("overview"); Navigate("properties");
+                    Check(Tree(content).OfType<TextBox>().Single(x => x.Tag?.ToString() == "motd").Text == "設定反映テスト", "Properties GUI reopen failed");
+                    Record(engine, "properties-GUI-save-reopen-pass");
                     Check(SafeFiles.Files(Path.Combine(store.Root, "file-history")).Any(), "No file history");
                     foreach (var extension in new[] { "json", "toml", "yml", "yaml", "txt", "conf" })
                     {

@@ -6,6 +6,15 @@ using var downloads = new Downloads(); using var deadline = new CancellationToke
 var progress = new Progress<string>(s => { });
 try
 {
+    if (args.Contains("--updates-only"))
+    {
+        using var updates = new ReleaseUpdates();
+        var candidate = await updates.CheckAsync(new Version(0, 0, 0), deadline.Token) ?? throw new Exception("No packaged release found");
+        var downloaded = await updates.DownloadAsync(candidate, root, deadline.Token);
+        ReleaseUpdates.Verify(downloaded.Path, downloaded.Hash, candidate.Size);
+        Console.WriteLine($"PASS GitHub release v{candidate.Version}: downloaded and SHA256 verified {candidate.Size} bytes; no installer executed");
+        return;
+    }
     var versions = await downloads.MinecraftVersions(deadline.Token); Console.WriteLine($"PASS Mojang releases: {versions.Length}, latest {versions[0]}");
     if (args.Contains("--versions-only"))
     {
