@@ -53,7 +53,7 @@ public sealed class MainWindow : Window
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
         footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.2  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(new TextBlock { Text = "v0.1.3  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -301,39 +301,25 @@ public sealed class MainWindow : Window
     private void ModsPage()
     {
         var p = Selected!; var root = store.ServerDir(p);
-        var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedIndex = 0 }; local.Children.Add(folder);
+        var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedItem = p.Engine is "paper" or "folia" ? "plugins" : "mods" }; local.Children.Add(folder);
         var list = new ListBox { Height = 150 }; local.Children.Add(list);
         string Target() => Path.Combine(root, folder.SelectedItem.ToString()!);
         void Refresh() { Directory.CreateDirectory(Target()); list.ItemsSource = Directory.EnumerateFiles(Target()).Where(f => f.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jar.disabled", StringComparison.OrdinalIgnoreCase)).Select(Path.GetFileName).Order().ToArray(); }
         folder.SelectionChanged += (_, _) => Refresh(); Refresh();
-        var row = new WrapPanel(); row.Children.Add(Btn("JARを追加", () => { Stopped(p); var dialog = new OpenFileDialog { Filter = "MOD / Plugin|*.jar", Multiselect = true }; if (dialog.ShowDialog(this) != true) return; foreach (var file in dialog.FileNames) File.Copy(file, SafeFiles.Inside(Target(), Path.GetFileName(file)), false); Refresh(); }));
-        row.Children.Add(Btn("有効 / 無効", () => { Stopped(p); var name = list.SelectedItem?.ToString() ?? throw new IOException("ファイルを選択してください。"); var path = SafeFiles.Inside(Target(), name); File.Move(path, name.EndsWith(".disabled") ? path[..^9] : path + ".disabled"); Refresh(); }));
+        var row = new WrapPanel(); row.Children.Add(Btn("JARを追加", () => { Stopped(p); var dialog = new OpenFileDialog { Filter = "MOD / Plugin|*.jar", Multiselect = true }; if (dialog.ShowDialog(this) != true) return; new ServerFiles(store, p, Runtime(p)).AddJars(folder.SelectedItem.ToString()!, dialog.FileNames); Refresh(); }));
+        row.Children.Add(Btn("有効 / 無効", () => { Stopped(p); var name = list.SelectedItem?.ToString() ?? throw new IOException("ファイルを選択してください。"); new ServerFiles(store, p, Runtime(p)).ToggleJar(folder.SelectedItem.ToString()!, name); Refresh(); }));
         row.Children.Add(Btn("フォルダ", () => Open(Target()))); local.Children.Add(row);
         var preset = Card(page, "構成プリセット"); preset.Children.Add(Text("mods・plugins・configをひとまとまりで保存。切り替え前のサーバー全体もバックアップします。"));
         var presetRow = new WrapPanel(); presetRow.Children.Add(AsyncBtn("現在の構成を保存", async ct =>
         {
             Stopped(p); var name = Ask("プリセット名（英数字・日本語可）", "構成-" + DateTime.Now.ToString("MMdd-HHmm")); if (name == null) return;
-            var dest = SafeFiles.Inside(store.PresetDir(p), name + ".zip"); if (File.Exists(dest)) throw new IOException("同名プリセットがあります。");
-            var stage = Path.Combine(store.Root, "staging", Guid.NewGuid().ToString("N"));
-            try { await Task.Run(() => { foreach (var dir in new[] { "mods", "plugins", "config" }) SafeFiles.CopyTree(Path.Combine(root, dir), Path.Combine(stage, dir)); var zip = SafeFiles.Snapshot(stage, store.PresetDir(p)); File.Move(zip, dest); }, ct); }
-            finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
+            var files = new ServerFiles(store, p, Runtime(p)); await Task.Run(() => files.SavePreset(name), ct);
         }));
         presetRow.Children.Add(AsyncBtn("プリセットへ切り替え", async ct =>
         {
             Stopped(p); Directory.CreateDirectory(store.PresetDir(p)); var chosen = Choose("プリセット", Directory.EnumerateFiles(store.PresetDir(p), "*.zip").Select(f => Path.GetFileName(f)!)); if (chosen == null) return;
             if (!Confirm("mods / plugins / configを選択構成に置き換えます。現在の全体バックアップを作って続行しますか？")) return;
-            await Task.Run(() =>
-            {
-                var backup = SafeFiles.Snapshot(root, store.BackupDir(p)); var stage = root + ".preset-" + Guid.NewGuid().ToString("N");
-                try
-                {
-                    SafeFiles.ExtractZip(SafeFiles.Inside(store.PresetDir(p), chosen), stage);
-                    foreach (var entry in Directory.EnumerateFileSystemEntries(stage)) if (!new[] { "mods", "plugins", "config" }.Contains(Path.GetFileName(entry))) throw new IOException("プリセットの内容が不正です。");
-                    try { foreach (var dir in new[] { "mods", "plugins", "config" }) { var target = SafeFiles.Inside(root, dir); if (Directory.Exists(target)) Directory.Delete(target, true); if (Directory.Exists(Path.Combine(stage, dir))) Directory.Move(Path.Combine(stage, dir), target); } }
-                    catch { SafeFiles.Restore(backup, root); throw; }
-                }
-                finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
-            }, ct); Refresh();
+            var files = new ServerFiles(store, p, Runtime(p)); await Task.Run(() => files.ApplyPreset(chosen), ct); Refresh();
         })); preset.Children.Add(presetRow);
         var search = Card(page, "Modrinthから検索・導入"); var query = Field(search, "MOD名（選択サーバーのMCバージョン・ローダーで検索）", ""); var hits = new ListBox { Height = 150 }; List<JsonNode> results = [];
         search.Children.Add(AsyncBtn("検索", async ct => { var nodes = await downloads.SearchMods(query.Text, p.Version, p.Engine, ct); results = nodes.Select(n => n!).ToList(); hits.ItemsSource = results.Select(n => n["title"]!.ToString() + "  —  " + n["description"]!.ToString()).ToArray(); })); search.Children.Add(hits);
@@ -342,7 +328,7 @@ public sealed class MainWindow : Window
             Stopped(p); if (hits.SelectedIndex < 0) throw new IOException("検索結果を選択してください。");
             var releases = await downloads.ResolveMods(results[hits.SelectedIndex]["project_id"]!.ToString(), p.Version, p.Engine, ct);
             if (!Confirm("導入予定:\n" + string.Join("\n", releases.Select(n => n["name"]!.ToString())) + "\n\n既存MODとの互換性は作者の説明も確認してください。導入しますか？")) return;
-            await downloads.InstallMods(releases, Path.Combine(root, "mods"), Progress(), ct); Refresh();
+            await downloads.InstallMods(releases, Path.Combine(root, p.Engine is "paper" or "folia" ? "plugins" : "mods"), Progress(), ct); Refresh();
         }, true));
         var packs = Card(page, "Modrinth MODパック (.mrpack)"); packs.Children.Add(Text("空の新規サーバーへサーバー必須ファイルを取り込みます。クライアント専用・任意ファイルは除外。ローダー本体は別途導入します。"));
         packs.Children.Add(AsyncBtn("mrpackを取り込む", async ct =>
@@ -358,6 +344,7 @@ public sealed class MainWindow : Window
     private void FilesPage()
     {
         var p = Selected!; var root = store.ServerDir(p); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
+        if (p.Engine == "paper") card.Children.Add(Text("Paperの既存ワールドの難易度は、コンソールで difficulty hard などを送信して変更してください。設定ファイルだけでは既存ワールドへ反映されない場合があります。", 12));
         var candidates = Directory.EnumerateFiles(root).Concat(SafeFiles.Files(Path.Combine(root, "config"))).Concat(SafeFiles.Files(Path.Combine(root, "plugins")));
         var paths = candidates.Where(f => new[] { ".properties", ".json", ".toml", ".yml", ".yaml", ".txt", ".conf" }.Contains(Path.GetExtension(f).ToLowerInvariant()) && new FileInfo(f).Length < 1024 * 1024).Take(500).Select(f => Path.GetRelativePath(root, f)).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
         var list = new ComboBox { ItemsSource = paths, SelectedIndex = 0 }; card.Children.Add(list);
@@ -369,10 +356,7 @@ public sealed class MainWindow : Window
         mayLeave = () => !dirty || Confirm("設定ファイルの未保存の編集を破棄して移動しますか？");
         card.Children.Add(Btn("ファイルを保存", () =>
         {
-            Stopped(p); var path = SafeFiles.Inside(root, current);
-            if (current.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) _ = System.Text.Json.JsonDocument.Parse(editor.Text);
-            if (File.Exists(path)) { var archive = Path.Combine(store.Root, "file-history", p.Id, DateTime.Now.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N"), current); Directory.CreateDirectory(Path.GetDirectoryName(archive)!); File.Copy(path, archive); }
-            SafeFiles.AtomicWrite(path, editor.Text); dirty = false; status.Text = "保存しました";
+            new ServerFiles(store, p, Runtime(p)).SaveConfiguration(current, editor.Text); dirty = false; status.Text = "保存しました";
         }, true));
     }
     private void BackupsPage()

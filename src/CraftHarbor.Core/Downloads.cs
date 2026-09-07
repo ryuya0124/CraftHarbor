@@ -10,7 +10,7 @@ public sealed class Downloads : IDisposable
     {
         http = handler == null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromMinutes(15);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.2 (https://github.com/ryuya0124/CraftHarbor)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor/0.1.3 (https://github.com/ryuya0124/CraftHarbor)");
     }
     public async Task<JsonNode> Json(string url, CancellationToken ct = default) => JsonNode.Parse(await http.GetStringAsync(url, ct)) ?? throw new IOException("空のAPI応答です。");
     public static void ValidateUrl(string url)
@@ -128,7 +128,8 @@ public sealed class Downloads : IDisposable
     }
     public async Task<JsonArray> SearchMods(string query, string version, string loader, CancellationToken ct)
     {
-        var facets = System.Text.Json.JsonSerializer.Serialize(new[] { new[] { "project_type:mod" }, new[] { "versions:" + version }, new[] { "categories:" + loader }, new[] { "server_side:required", "server_side:optional" } });
+        var kind = loader is "paper" or "folia" ? "plugin" : "mod";
+        var facets = System.Text.Json.JsonSerializer.Serialize(new[] { new[] { "project_type:" + kind }, new[] { "versions:" + version }, new[] { "categories:" + loader }, new[] { "server_side:required", "server_side:optional" } });
         return (await Json($"https://api.modrinth.com/v2/search?query={Uri.EscapeDataString(query)}&facets={Uri.EscapeDataString(facets)}&limit=30", ct))["hits"]!.AsArray();
     }
     public async Task<List<JsonNode>> ResolveMods(string project, string version, string loader, CancellationToken ct)
@@ -185,11 +186,14 @@ public sealed class Downloads : IDisposable
         if (SafeFiles.Files(target).Any()) throw new IOException("MODパックは空の新規サーバーに取り込んでください。");
         var stage = target + ".pack-" + Guid.NewGuid().ToString("N");
         var unpack = stage + "-unpack";
+        var preserveStage = false;
         try
         {
             await Task.Run(() => SafeFiles.ExtractZip(archive, unpack), ct);
             var index = JsonNode.Parse(await System.IO.File.ReadAllTextAsync(SafeFiles.Inside(unpack, "modrinth.index.json"), ct))!;
             if ((int?)index["formatVersion"] != 1 || (string?)index["game"] != "minecraft") throw new IOException("未対応のMODパック形式です。");
+            if (index["dependencies"] is not JsonObject dependencies || dependencies["minecraft"] is not JsonValue minecraft || !minecraft.TryGetValue<string>(out var gameVersion) || string.IsNullOrWhiteSpace(gameVersion)) throw new IOException("MODパックのMinecraft依存情報が不正です。");
+            var dependencyJson = dependencies.ToJsonString(HarborStore.Json);
             Directory.CreateDirectory(stage);
             foreach (var file in index["files"]!.AsArray())
             {
@@ -210,10 +214,11 @@ public sealed class Downloads : IDisposable
                 }
             }
             ct.ThrowIfCancellationRequested();
-            if (Directory.Exists(target)) Directory.Delete(target); Directory.Move(stage, target);
-            return index["dependencies"]!.ToJsonString(HarborStore.Json);
+            try { SafeFiles.PromoteIntoEmptyDirectory(stage, target); }
+            catch (AggregateException) { preserveStage = true; throw; }
+            return dependencyJson;
         }
-        finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); if (Directory.Exists(unpack)) Directory.Delete(unpack, true); }
+        finally { if (!preserveStage && Directory.Exists(stage)) Directory.Delete(stage, true); if (Directory.Exists(unpack)) Directory.Delete(unpack, true); }
     }
     public void Dispose() => http.Dispose();
 }

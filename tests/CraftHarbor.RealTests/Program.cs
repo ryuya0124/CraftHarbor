@@ -145,6 +145,7 @@ try
         try
         {
             await Boot("initial");
+            await Command(runtime, "say 日本語コンソール確認", "日本語コンソール確認");
             if (engine == "fabric" && !runtime.History.Any(s => s.Contains("fabric-api"))) throw new IOException("Fabric API was not loaded");
             await Command(runtime, "gamerule spawnRadius 0", "spawnRadius");
             await Command(runtime, "setworldspawn 2 -60 2", "world spawn");

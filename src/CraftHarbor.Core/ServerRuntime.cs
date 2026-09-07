@@ -44,6 +44,8 @@ public sealed class ServerRuntime : IDisposable
         p.Validate();
         var info = new ProcessStartInfo(p.JavaPath) { WorkingDirectory = directory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, StandardInputEncoding = new UTF8Encoding(false) };
         info.ArgumentList.Add($"-Xms{p.MinMemoryMb}M"); info.ArgumentList.Add($"-Xmx{p.MaxMemoryMb}M");
+        // Match the UTF-8 redirected streams on Windows, including legacy JREs.
+        foreach (var property in new[] { "file.encoding", "stdout.encoding", "stderr.encoding", "sun.stdout.encoding", "sun.stderr.encoding" }) info.ArgumentList.Add("-D" + property + "=UTF-8");
         foreach (var arg in p.JvmArgs) info.ArgumentList.Add(arg);
         if (p.LaunchArgs.Length > 0) foreach (var arg in p.LaunchArgs) info.ArgumentList.Add(arg);
         else { info.ArgumentList.Add("-jar"); info.ArgumentList.Add(SafeFiles.Inside(directory, p.Jar)); info.ArgumentList.Add("nogui"); }

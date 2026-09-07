@@ -1,7 +1,7 @@
 const mineflayer = require('mineflayer')
 const { Vec3 } = require('vec3')
 const fs = require('node:fs')
-const [portText, expected, resultPath] = process.argv.slice(2)
+const [portText, expected, resultPath, settingsText] = process.argv.slice(2)
 const port = Number(portText)
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid isolated port')
 const bot = mineflayer.createBot({host: '127.0.0.1', port, username: 'HarborProbe', auth: 'offline', version: '1.21.1', viewDistance: 'tiny'})
@@ -38,6 +38,13 @@ bot.once('spawn', async () => {
     }
     if (marker?.name !== expected) throw new Error('World marker mismatch: ' + marker?.name + ', expected ' + expected)
     if (!chatEcho || !serverReply) throw new Error('Chat/console roundtrip failed')
-    finish(null, {joined: true, chunksReceived: true, marker: marker.name, chatEcho, serverReply, position: bot.entity.position, health: bot.health, protocolVersion: bot.version})
+    let settings
+    if (settingsText) {
+      const expectedSettings = JSON.parse(settingsText)
+      const status = await new Promise((resolve, reject) => require('minecraft-protocol').ping({host: '127.0.0.1', port}, (error, result) => error ? reject(error) : resolve(result)))
+      settings = {gameMode: bot.game.gameMode, difficulty: bot.game.difficulty, maxPlayers: status.players.max, motd: JSON.stringify(status.description)}
+      if (settings.gameMode !== expectedSettings.gameMode || settings.difficulty !== expectedSettings.difficulty || settings.maxPlayers !== expectedSettings.maxPlayers || !settings.motd.includes(expectedSettings.motd)) throw new Error('Settings mismatch: ' + JSON.stringify(settings))
+    }
+    finish(null, {joined: true, chunksReceived: true, marker: marker.name, chatEcho, serverReply, position: bot.entity.position, health: bot.health, protocolVersion: bot.version, settings})
   } catch (error) { finish(error) }
 })
