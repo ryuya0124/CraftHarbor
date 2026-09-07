@@ -130,11 +130,52 @@ await Test("Persistent Windows lock: restore fails within bound and retains both
     Check(File.ReadAllText(Path.Combine(stage, "level.dat")) == "backup-state");
     Check(File.Exists(archive));
 });
-await Test("Empty preset clears configuration but preserves world and backup", () => Sync(() =>
+await Test("Empty preset preserves configuration, world and backup", () => Sync(() =>
 {
     var store = new HarborStore(Temp("empty-preset")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
     files.SavePreset("empty"); files.SaveConfiguration("config/test.json", "{}"); files.SaveConfiguration("world/level.dat", "world");
-    var backup = files.ApplyPreset("empty.zip"); Check(File.Exists(backup)); Check(!Directory.Exists(Path.Combine(store.ServerDir(p), "config"))); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "world/level.dat")) == "world");
+    var backup = files.ApplyPreset("empty.zip"); Check(File.Exists(backup)); Check(File.Exists(Path.Combine(store.ServerDir(p), "config/test.json"))); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "world/level.dat")) == "world");
+}));
+await Test("MOD config catalog and presets preserve schemas, extras and plugin data", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("mod-settings")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime); var dir = store.ServerDir(p);
+    var paths = new[] { "config/ftbchunks.snbt", "config/lithium.properties", "config/sample.json5", "config/sample.jsonc", "config/legacy.cfg", "defaultconfigs/create-server.toml", "Adventure/serverconfig/mekanism.toml", "kubejs/server_scripts/recipes.js", "scripts/recipes.zs", "plugins/Chunky/config.yml", ModConfigurations.AutoModpack };
+    foreach (var path in paths) files.SaveConfiguration(path, path.EndsWith(".json") ? "{}" : "# original 日本語\nvalue = 1");
+    files.SaveConfiguration("config/custom.unknown", "opaque-settings"); files.SaveConfiguration("plugins/Example/players.db", "player-data");
+    files.SaveConfiguration("automodpack/private.key", "secret"); files.SaveConfiguration("Adventure/level.dat", "world");
+    var visible = ModConfigurations.EditableFiles(dir).Select(x => x.Replace('\\', '/')).ToArray();
+    Check(paths.All(visible.Contains)); Check(!visible.Any(x => x.Contains("private") || x.EndsWith("level.dat") || x.EndsWith(".db")));
+    var jar = Temp("settings.jar"); File.WriteAllText(jar, "jar"); files.AddJars("mods", [jar]);
+    var preset = files.SavePreset("saved"); using (var zip = ZipFile.OpenRead(preset))
+    {
+        var names = zip.Entries.Select(e => e.FullName.Replace('\\', '/')).ToArray();
+        Check(paths.All(names.Contains)); Check(names.Contains("config/custom.unknown")); Check(!names.Any(x => x.EndsWith(".db") || x.EndsWith(".key") || x.EndsWith("level.dat")));
+    }
+    foreach (var path in paths) files.SaveConfiguration(path, path.EndsWith(".json") ? "{\"changed\":true}" : "changed");
+    files.SaveConfiguration("config/added-later.toml", "keep"); files.ToggleJar("mods", "settings.jar");
+    files.ApplyPreset("saved.zip");
+    Check(paths.All(x => File.ReadAllText(Path.Combine(dir, x)).Contains("changed"))); Check(File.Exists(Path.Combine(dir, "mods/settings.jar"))); Check(!File.Exists(Path.Combine(dir, "mods/settings.jar.disabled")));
+    files.ApplyPreset("saved.zip", false);
+    Check(paths.All(x => !File.ReadAllText(Path.Combine(dir, x)).Contains("changed")));
+    Check(File.ReadAllText(Path.Combine(dir, "config/added-later.toml")) == "keep"); Check(File.ReadAllText(Path.Combine(dir, "plugins/Example/players.db")) == "player-data"); Check(File.ReadAllText(Path.Combine(dir, "Adventure/level.dat")) == "world");
+}));
+await Test("Preset partial failure rolls back JARs and settings", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("preset-rollback")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime); var dir = store.ServerDir(p);
+    files.SaveConfiguration("config/blocked", "keep"); var jar = Temp("rollback.jar"); File.WriteAllText(jar, "old jar"); files.AddJars("mods", [jar]);
+    Directory.CreateDirectory(store.PresetDir(p));
+    using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "collision.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("config/blocked/new.toml").Open()); w.Write("new"); }
+    Throws<IOException>(() => files.ApplyPreset("collision.zip", false));
+    Check(File.ReadAllText(Path.Combine(dir, "mods/rollback.jar")) == "old jar"); Check(File.ReadAllText(Path.Combine(dir, "config/blocked")) == "keep"); Check(Directory.GetFiles(store.BackupDir(p), "*.zip").Length == 1);
+}));
+await Test("Legacy preset merges settings and cannot overwrite world data", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("legacy-merge")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);
+    files.SaveConfiguration("config/keep.txt", "current"); Directory.CreateDirectory(store.PresetDir(p));
+    using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "legacy.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("config/keep.txt").Open()); w.Write("old"); }
+    files.ApplyPreset("legacy.zip"); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/keep.txt")) == "current");
+    using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "bad.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("world/level.dat").Open()); w.Write("bad"); }
+    Throws<IOException>(() => files.ApplyPreset("bad.zip", false)); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/keep.txt")) == "current");
 }));
 await Test("Configuration invalid JSON and traversal preserve original/history", () => Sync(() =>
 {

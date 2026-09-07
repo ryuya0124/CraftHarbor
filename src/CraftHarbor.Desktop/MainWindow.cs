@@ -53,7 +53,7 @@ public sealed class MainWindow : Window
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
         footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.4  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(new TextBlock { Text = "v0.1.5  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -307,7 +307,7 @@ public sealed class MainWindow : Window
         var autoConfig = Path.Combine(root, "automodpack", "automodpack-server.json");
         sync.Children.Add(Text(File.Exists(autoConfig) ? "AutoModpackのサーバー設定を検出しました。設定ファイル画面で編集できます。" : "対応するAutoModpackをサーバーとクライアントへ導入します。初回起動後に生成されるサーバー設定を編集できます。"));
         sync.Children.Add(Text("同期対象はAutoModpackのsyncedFilesと配布専用フォルダで管理します。MOD・設定変更後はコンソールの automodpack generate で同期データを再生成してください。", 12));
-        sync.Children.Add(Text("通常の構成プリセットはmods / plugins / configのみです。automodpack配下の配布設定・専用ファイルは含みません。サーバー全体バックアップには含まれます。", 12));
+        sync.Children.Add(Text("構成プリセットにはAutoModpackのサーバー設定も保存します。配布ファイル・鍵は全体バックアップで保管してください。", 12));
         var syncRow = new WrapPanel(); syncRow.Children.Add(Btn("設定ファイルへ", () => Navigate("files"))); syncRow.Children.Add(Btn("コンソールへ", () => Navigate("console"))); syncRow.Children.Add(Btn("AutoModpack公式ガイド", () => Open("https://github.com/Skidamek/AutoModpack/blob/main/docs/quick-start.mdx"))); sync.Children.Add(syncRow);
         var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedItem = p.Engine is "paper" or "folia" ? "plugins" : "mods" }; local.Children.Add(folder);
         var list = new ListBox { Height = 150 }; local.Children.Add(list);
@@ -317,7 +317,9 @@ public sealed class MainWindow : Window
         var row = new WrapPanel(); row.Children.Add(Btn("JARを追加", () => { Stopped(p); var dialog = new OpenFileDialog { Filter = "MOD / Plugin|*.jar", Multiselect = true }; if (dialog.ShowDialog(this) != true) return; new ServerFiles(store, p, Runtime(p)).AddJars(folder.SelectedItem.ToString()!, dialog.FileNames); Refresh(); }));
         row.Children.Add(Btn("有効 / 無効", () => { Stopped(p); var name = list.SelectedItem?.ToString() ?? throw new IOException("ファイルを選択してください。"); new ServerFiles(store, p, Runtime(p)).ToggleJar(folder.SelectedItem.ToString()!, name); Refresh(); }));
         row.Children.Add(Btn("フォルダ", () => Open(Target()))); local.Children.Add(row);
-        var preset = Card(page, "構成プリセット"); preset.Children.Add(Text("mods・plugins・configをひとまとまりで保存。切り替え前のサーバー全体もバックアップします。"));
+        var preset = Card(page, "構成プリセット"); preset.Children.Add(Text("MOD・プラグインJARと設定を保存。defaultconfigs・ワールド直下のserverconfig・KubeJS・scriptsにも対応。切替前に全体をバックアップします。"));
+        var keepSettings = new CheckBox { Content = "現在の設定を維持（未配置の設定だけ追加）", IsChecked = true }; preset.Children.Add(keepSettings);
+        preset.Children.Add(Text("チェックを外すと同名設定をプリセットの内容に戻します。プリセットにない設定・プラグインデータはどちらでも残ります。", 12));
         var presetRow = new WrapPanel(); presetRow.Children.Add(AsyncBtn("現在の構成を保存", async ct =>
         {
             Stopped(p); var name = Ask("プリセット名（英数字・日本語可）", "構成-" + DateTime.Now.ToString("MMdd-HHmm")); if (name == null) return;
@@ -326,8 +328,9 @@ public sealed class MainWindow : Window
         presetRow.Children.Add(AsyncBtn("プリセットへ切り替え", async ct =>
         {
             Stopped(p); Directory.CreateDirectory(store.PresetDir(p)); var chosen = Choose("プリセット", Directory.EnumerateFiles(store.PresetDir(p), "*.zip").Select(f => Path.GetFileName(f)!)); if (chosen == null) return;
-            if (!Confirm("mods / plugins / configを選択構成に置き換えます。現在の全体バックアップを作って続行しますか？")) return;
-            var files = new ServerFiles(store, p, Runtime(p)); await Task.Run(() => files.ApplyPreset(chosen), ct); Refresh();
+            var preserve = keepSettings.IsChecked == true;
+            if (!Confirm("MOD・プラグインJARを切り替えます。" + (preserve ? "現在の設定を維持します。" : "同名設定をプリセットの内容で上書きします。") + "全体バックアップを作って続行しますか？")) return;
+            var files = new ServerFiles(store, p, Runtime(p)); await Task.Run(() => files.ApplyPreset(chosen, preserve), ct); Refresh();
         })); preset.Children.Add(presetRow);
         var search = Card(page, "Modrinthから検索・導入"); var query = Field(search, "MOD名（選択サーバーのMCバージョン・ローダーで検索）", ""); var hits = new ListBox { Height = 150 }; List<JsonNode> results = [];
         search.Children.Add(AsyncBtn("検索", async ct => { var nodes = await downloads.SearchMods(query.Text, p.Version, p.Engine, ct); results = nodes.Select(n => n!).ToList(); hits.ItemsSource = results.Select(n => n["title"]!.ToString() + "  —  " + n["description"]!.ToString()).ToArray(); })); search.Children.Add(hits);
@@ -353,10 +356,8 @@ public sealed class MainWindow : Window
     {
         var p = Selected!; var root = store.ServerDir(p); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
         if (p.Engine == "paper") card.Children.Add(Text("Paperの既存ワールドの難易度は、コンソールで difficulty hard などを送信して変更してください。設定ファイルだけでは既存ワールドへ反映されない場合があります。", 12));
-        var autoConfig = Path.Combine(root, "automodpack", "automodpack-server.json");
-        var candidates = Directory.EnumerateFiles(root).Concat(SafeFiles.Files(Path.Combine(root, "config"))).Concat(SafeFiles.Files(Path.Combine(root, "plugins")));
-        if (File.Exists(autoConfig)) candidates = new[] { SafeFiles.Inside(root, "automodpack/automodpack-server.json") }.Concat(candidates);
-        var paths = candidates.Where(f => new[] { ".properties", ".json", ".toml", ".yml", ".yaml", ".txt", ".conf" }.Contains(Path.GetExtension(f).ToLowerInvariant()) && new FileInfo(f).Length < 1024 * 1024).Take(500).Select(f => Path.GetRelativePath(root, f)).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
+        card.Children.Add(Text("FTBのSNBT、JSON5/JSONC、CFG、KubeJSのJS、CraftTweakerのZSにも対応。JSON以外の構文・値は各MOD側で検証されます。最大500件・1ファイル1MB未満。", 12));
+        var paths = ModConfigurations.EditableFiles(root).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
         var list = new ComboBox { ItemsSource = paths, SelectedIndex = 0 }; card.Children.Add(list);
         var editor = new TextBox { AcceptsReturn = true, AcceptsTab = true, Height = 340, FontFamily = new FontFamily("Consolas"), FontSize = 13, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
         string current = ""; bool dirty = false; bool loading = false;

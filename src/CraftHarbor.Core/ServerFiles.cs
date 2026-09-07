@@ -46,27 +46,47 @@ public sealed class ServerFiles(HarborStore store, ServerProfile profile, Server
         var stage = Path.Combine(store.Root, "staging", Guid.NewGuid().ToString("N"));
         try
         {
-            foreach (var dir in new[] { "mods", "plugins", "config" }) SafeFiles.CopyTree(Path.Combine(Root, dir), Path.Combine(stage, dir));
+            Directory.CreateDirectory(stage);
+            // Only JARs belong to the binary selection. Plugin data remains on the server.
+            var jars = new[] { "mods", "plugins" }.SelectMany(dir => Directory.Exists(Path.Combine(Root, dir)) ? Directory.EnumerateFiles(SafeFiles.Inside(Root, dir)) : [])
+                .Where(f => ModConfigurations.IsManagedJar(Path.GetRelativePath(Root, f)));
+            var pluginConfigs = SafeFiles.Files(SafeFiles.Inside(Root, "plugins"))
+                .Where(f => ModConfigurations.IsTextConfiguration(f));
+            foreach (var source in ModConfigurations.PresetFiles(Root).Concat(jars).Concat(pluginConfigs).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var relative = Path.GetRelativePath(Root, source); _ = SafeFiles.Inside(Root, relative);
+                var target = SafeFiles.Inside(stage, relative); Directory.CreateDirectory(Path.GetDirectoryName(target)!); File.Copy(source, target);
+            }
             var zip = SafeFiles.Snapshot(stage, store.PresetDir(profile)); File.Move(zip, dest); return dest;
         }
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
     }
-    public string ApplyPreset(string name)
+    public string ApplyPreset(string name, bool keepExistingSettings = true)
     {
         Stopped(); var stage = Root + ".preset-" + Guid.NewGuid().ToString("N");
         try
         {
             Directory.CreateDirectory(stage);
             SafeFiles.ExtractZip(SafeFiles.Inside(store.PresetDir(profile), name), stage);
-            foreach (var entry in Directory.EnumerateFileSystemEntries(stage))
-                if (!new[] { "mods", "plugins", "config" }.Contains(Path.GetFileName(entry)) || !Directory.Exists(entry)) throw new IOException("プリセットの内容が不正です。");
+            var entries = SafeFiles.Files(stage).Select(f => Path.GetRelativePath(stage, f)).ToArray();
+            foreach (var relative in entries)
+                if (!ModConfigurations.AllowedPresetFile(relative)) throw new IOException("プリセットの内容が不正です。");
             var backup = SafeFiles.Snapshot(Root, store.BackupDir(profile));
             try
             {
-                foreach (var dir in new[] { "mods", "plugins", "config" })
+                foreach (var dir in new[] { "mods", "plugins" })
                 {
-                    var target = SafeFiles.Inside(Root, dir); if (Directory.Exists(target)) Directory.Delete(target, true);
-                    if (Directory.Exists(Path.Combine(stage, dir))) Directory.Move(Path.Combine(stage, dir), target);
+                    var target = SafeFiles.Inside(Root, dir);
+                    if (Directory.Exists(target))
+                        foreach (var file in Directory.EnumerateFiles(target).Where(f => ModConfigurations.IsManagedJar(Path.GetRelativePath(Root, f))))
+                            File.Delete(SafeFiles.Inside(Root, Path.GetRelativePath(Root, file)));
+                }
+                foreach (var relative in entries)
+                {
+                    var target = SafeFiles.Inside(Root, relative);
+                    if (!ModConfigurations.IsManagedJar(relative) && keepExistingSettings && File.Exists(target)) continue;
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(SafeFiles.Inside(stage, relative), target, true);
                 }
             }
             catch { SafeFiles.Restore(backup, Root); throw; }

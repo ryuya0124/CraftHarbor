@@ -1,5 +1,21 @@
 # MOD・設定・プリセットの実機検証
 
+## v0.1.5 設定保持の追加検証（2026-09-07 20:25–20:28 JST）
+
+隔離したFabric / Forge / NeoForge / Paper / Adrenalineを再検証し、14回すべての起動・入室が成功しました。Minecraft 1.21.1、Java 21、各1536MB・2CPU、ループバック限定です。Fabric・Forge・NeoForgeのspark、PaperのChunky、Adrenalineの18 JARは下表と同じバージョンです。
+
+- Fabric / Forge / NeoForge / Paperで、標準のプリセット適用後も変更済み設定を維持。同名設定を復元するモードでも、後から追加したconfig・world/serverconfigのファイルを維持。
+- 復元後にMODコマンド、入室、日本語MOTD、難易度、ゲームモード、最大人数を確認。Chunkyの設定復元後は日本語ヘルプも確認。
+- Adrenalineでは18 JARのプリセット復元後に再起動・入室を確認。
+- Core 40件成功。SNBT/JSON5/JSONC/CFG/TOML/JS/ZS/AutoModpack設定の探索・保持、旧ZIPの既存優先マージ、空構成、途中失敗時のJARと設定のロールバックを含む。
+- WPFテスト成功。追加形式を画面で選択・保存し、設定維持が既定でオン、既存のローダー選択・両テーマも確認。
+- 利用中の既存Java PID 24260は開始・終了時とも稼働。テスト対象にしていません。
+
+実サーバー試験は共通処理を呼び、確認ダイアログの選択はテストから指定しています。FTB/Create/Mekanism/KubeJS/CraftTweaker本体の網羅的な動作確認やAutoModpackのクライアント同期完了を示す結果ではありません。[設定対応の範囲](MOD_CONFIGURATIONS.md)。
+
+以下はv0.1.3時点の検証記録です。
+
+
 2026-09-07、Windows 11 x64 / .NET 10.0.400 / Temurin JRE 21.0.12.1 / Minecraft 1.21.1で実施。取得したファイルの確認だけでなく、WPFの画面コントロール、実Javaサーバー、Mineflayer 4.39.0の接続を組み合わせています。
 
 ## 構成と確認内容

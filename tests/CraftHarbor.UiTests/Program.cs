@@ -83,6 +83,19 @@ internal static class Program
             Descendants(content).OfType<TextBox>().Single().Text = "{\"modpackName\":\"日本語同期テスト\"}";
             Descendants(content).OfType<Button>().Single(b => b.Content?.ToString() == "ファイルを保存").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             if (!File.ReadAllText(Path.Combine(autoDir, "automodpack-server.json")).Contains("日本語同期テスト") || !SafeFiles.Files(Path.Combine(root, "file-history")).Any()) throw new Exception("AutoModpack save/history failed");
+            var extraConfigs = new[] { "config/ftb.snbt", "config/mod.json5", "defaultconfigs/create.toml", "Adventure/serverconfig/mod.toml", "kubejs/server_scripts/test.js", "scripts/test.zs" };
+            foreach (var relative in extraConfigs) { var file = Path.Combine(serverDir, relative); Directory.CreateDirectory(Path.GetDirectoryName(file)!); File.WriteAllText(file, "original"); }
+            navigate.Invoke(window, ["files"]); Layout(); configs = Descendants(content).OfType<ComboBox>().Single();
+            foreach (var relative in extraConfigs)
+            {
+                var item = relative.Replace('/', Path.DirectorySeparatorChar); if (!configs.Items.Contains(item)) throw new Exception("Missing config " + relative);
+                configs.SelectedItem = item; Descendants(content).OfType<TextBox>().Single().Text = "edited 日本語";
+                Descendants(content).OfType<Button>().Single(b => b.Content?.ToString() == "ファイルを保存").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                if (File.ReadAllText(Path.Combine(serverDir, relative)) != "edited 日本語") throw new Exception("Save failed " + relative);
+            }
+            navigate.Invoke(window, ["mods"]); Layout();
+            if (Descendants(content).OfType<CheckBox>().Single(b => b.Content?.ToString()?.StartsWith("現在の設定を維持") == true).IsChecked != true) throw new Exception("Preserve settings must be default");
+            Console.WriteLine("PASS extended MOD config UI edits and preservation default");
             navigate.Invoke(window, ["console"]); Layout();
             foreach (var command in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" })
                 if (!Descendants(content).OfType<Button>().Any(b => b.Content?.ToString() == command)) throw new Exception("Missing AutoModpack command");

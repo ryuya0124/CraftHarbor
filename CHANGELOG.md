@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.5 — 2026-09-07
+
+- プリセット切替の標準を既存設定の維持に変更。同名設定を戻す場合も未収録の設定は削除しない。
+- defaultconfigs、ワールド直下のserverconfig、KubeJS、CraftTweaker scripts、AutoModpackサーバー設定を保存対象に追加。
+- SNBT・JSON5・JSONC・CFG・HOCON・JS・ZSの編集と履歴保存に対応。
+- プラグインのデータフォルダを丸ごと削除する処理を廃止。新規プリセットにはJARと対応テキスト設定を保存。
+- 旧ZIPプリセットも読み込み可能。詳細・互換性の限界はdocs/MOD_CONFIGURATIONS.md。
+
+
 ## 0.1.4 — 2026-09-07
 
 - AutoModpackの案内をMOD画面へ追加。同期範囲と通常プリセット・全体バックアップの違いを表示
