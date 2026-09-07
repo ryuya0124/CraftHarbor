@@ -115,8 +115,34 @@ public static class PropertyFields
         new("allow-nether", "ネザーを有効にする", "ワールド生成", "bool"), new("enable-command-block", "コマンドブロック", "参加・権限", "bool"),
         new("enable-rcon", "RCONを有効にする", "管理・配布", "bool"), new("rcon.port", "RCONポート", "管理・配布", "number", Min: 1, Max: 65535), new("rcon.password", "RCONパスワード", "管理・配布", "password"),
         new("enable-query", "Queryを有効にする", "管理・配布", "bool"), new("query.port", "Queryポート", "管理・配布", "number", Min: 1, Max: 65535),
-        new("resource-pack", "リソースパックURL", "管理・配布"), new("require-resource-pack", "リソースパックを必須にする", "管理・配布", "bool")
+        new("resource-pack", "リソースパックURL", "管理・配布"), new("require-resource-pack", "リソースパックを必須にする", "管理・配布", "bool"),
+        new("accepts-transfers", "他サーバーからの転送接続を許可", "参加・権限", "bool"),
+        new("broadcast-console-to-ops", "コンソールの実行結果を管理者へ通知", "管理・配布", "bool"),
+        new("broadcast-rcon-to-ops", "遠隔コマンドの実行結果を管理者へ通知", "管理・配布", "bool"),
+        new("bug-report-link", "不具合報告ページのアドレス", "管理・配布"),
+        new("enable-jmx-monitoring", "Javaの外部監視を有効にする", "管理・配布", "bool"),
+        new("enable-status", "サーバー一覧への状態応答", "参加・権限", "bool"),
+        new("entity-broadcast-range-percentage", "生物・物体の通知範囲（%）", "負荷・通信", "number", Min: 10, Max: 1000),
+        new("function-permission-level", "データパック関数の権限レベル", "参加・権限", "number", Max: 4),
+        new("generator-settings", "ワールド生成の詳細条件", "ワールド生成"),
+        new("hide-online-players", "参加中プレイヤーの一覧を非公開にする", "参加・権限", "bool"),
+        new("initial-disabled-packs", "新規ワールドで無効にするデータパック", "ワールド生成"),
+        new("initial-enabled-packs", "新規ワールドで有効にするデータパック", "ワールド生成"),
+        new("log-ips", "接続元のIPアドレスをログに記録", "管理・配布", "bool"),
+        new("max-chained-neighbor-updates", "連鎖するブロック更新の上限", "負荷・通信", "number", Min: -1),
+        new("max-world-size", "ワールドの最大半径（ブロック）", "ワールド生成", "number", Min: 1, Max: 29999984),
+        new("prevent-proxy-connections", "プロキシ経由と判定した接続を拒否", "参加・権限", "bool"),
+        new("rate-limit", "毎秒の通信パケット数制限（0で無効）", "負荷・通信", "number"),
+        new("region-file-compression", "ワールド保存の圧縮方式", "負荷・通信", Options: ["deflate", "lz4", "none"]),
+        new("resource-pack-id", "配布リソースパックの識別番号", "管理・配布"),
+        new("resource-pack-prompt", "リソースパック導入時の案内文", "管理・配布"),
+        new("resource-pack-sha1", "リソースパックの検証用ハッシュ", "管理・配布"),
+        new("spawn-npcs", "村人などの出現", "ワールド生成", "bool"),
+        new("sync-chunk-writes", "チャンクの同期書き込み", "負荷・通信", "bool"),
+        new("text-filtering-config", "チャットフィルターの接続設定", "管理・配布"),
+        new("text-filtering-version", "チャットフィルターの方式番号", "管理・配布", "number"),
+        new("use-native-transport", "OS固有の通信処理を使用", "負荷・通信", "bool")
     ];
     public static PropertyField For(string key, string value) => All.FirstOrDefault(f => f.Key == key)
-        ?? new(key, key, "その他", key.Contains("password", StringComparison.OrdinalIgnoreCase) || key.Contains("secret", StringComparison.OrdinalIgnoreCase) ? "password" : value is "true" or "false" ? "bool" : "text");
+        ?? new(key, "追加設定（翻訳未登録）", "追加・独自設定", key.Contains("password", StringComparison.OrdinalIgnoreCase) || key.Contains("secret", StringComparison.OrdinalIgnoreCase) ? "password" : value is "true" or "false" ? "bool" : "text");
 }

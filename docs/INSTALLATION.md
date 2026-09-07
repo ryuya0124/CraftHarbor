@@ -2,7 +2,7 @@
 
 ## インストール
 
-GitHub Releasesの`CraftHarbor-0.1.8-win-x64-setup.exe`を実行し、画面に従ってインストールします。Windows x64向けで、.NETランタイムを同梱しています。管理者権限は不要です。
+GitHub Releasesの`CraftHarbor-0.1.9-win-x64-setup.exe`を実行し、画面に従ってインストールします。Windows x64向けで、.NETランタイムを同梱しています。管理者権限は不要です。
 
 標準の配置先は`%LOCALAPPDATA%\Programs\CraftHarbor`です。スタートメニューの「CraftHarbor」から起動できます。「CraftHarbor をアンインストール」も同じグループに登録します。インストール完了時にアプリやMinecraftサーバーを自動起動しません。
 

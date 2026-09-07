@@ -39,6 +39,15 @@ public sealed class ServerFiles(HarborStore store, ServerProfile profile, Server
         }
         SafeFiles.AtomicWrite(path, content);
     }
+    public string SaveModSettings(string relative, string expectedText, IReadOnlyDictionary<string, string> changes)
+    {
+        Stopped(); var path = SafeFiles.Inside(Root, relative);
+        if (!ModConfigurations.EditableFiles(Root).Contains(relative)) throw new IOException("編集対象の設定ファイルではありません。");
+        if (File.ReadAllText(path) != expectedText) throw new IOException("設定ファイルが別の操作で変更されました。画面を開き直してください。");
+        var updated = new ModSettingDocument(expectedText, Path.GetExtension(relative)).Apply(changes);
+        if (changes.Count > 0) SaveConfiguration(relative, updated);
+        return updated;
+    }
     public string SaveServerProperties(string? expectedText, IReadOnlyDictionary<string, string> changes)
     {
         Stopped();

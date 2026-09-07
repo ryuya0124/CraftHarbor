@@ -114,15 +114,15 @@ public static class Diagnostics
     {
         var text = new StringBuilder();
         using var self = Process.GetCurrentProcess();
-        text.AppendLine($"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
-        text.AppendLine($"CPU論理コア: {Environment.ProcessorCount} / {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}");
+        text.AppendLine($"オペレーティングシステム: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
+        text.AppendLine($"CPUの論理コア数: {Environment.ProcessorCount} / {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}");
         text.AppendLine($"アプリ使用メモリ: {self.WorkingSet64 / 1048576d:F1} MB");
-        text.AppendLine($"GC利用可能メモリ上限: {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824d:F1} GB");
+        text.AppendLine($"ランタイムが利用できるメモリ上限: {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824d:F1} GB");
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady)) text.AppendLine($"ドライブ {drive.Name} 空き {drive.AvailableFreeSpace / 1073741824d:F1} / {drive.TotalSize / 1073741824d:F1} GB");
         foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up))
-            foreach (var ip in nic.GetIPProperties().UnicastAddresses.Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)) text.AppendLine($"LAN: {nic.Name} → {ip.Address}");
-        text.AppendLine("\nTCP待受: " + string.Join(", ", IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Select(x => x.Port).Distinct().Order()));
-        text.AppendLine("\nLANの接続先は LAN IP:ポート。外部公開はルーターのTCP転送とWindows Firewallの許可が必要です。\nこのアプリはルーター・Firewallを自動変更しません。ローカル疎通の成功はインターネットからの到達を保証しません。");
+            foreach (var ip in nic.GetIPProperties().UnicastAddresses.Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)) text.AppendLine($"ローカルIPアドレス: {nic.Name} → {ip.Address}");
+        text.AppendLine("\n接続を待ち受けているポート: " + string.Join(", ", IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Select(x => x.Port).Distinct().Order()));
+        text.AppendLine("\nLANの接続先は LAN IP:ポート。外部公開はルーターのTCP転送とWindowsファイアウォールの許可が必要です。\nこのアプリはルーター・ファイアウォールを自動変更しません。ローカル疎通の成功はインターネットからの到達を保証しません。");
         return text.ToString();
     }
     public static async Task<string> Probe(string host, int port)

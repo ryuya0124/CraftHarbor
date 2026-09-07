@@ -177,6 +177,43 @@ await Test("Legacy preset merges settings and cannot overwrite world data", () =
     using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "bad.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("world/level.dat").Open()); w.Write("bad"); }
     Throws<IOException>(() => files.ApplyPreset("bad.zip", false)); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/keep.txt")) == "current");
 }));
+await Test("All generated Minecraft 1.21.1 property keys have Japanese labels", () => Sync(() =>
+{
+    var keys = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "Fixtures", "minecraft-1.21.1-property-keys.txt"));
+    Check(keys.Length >= 60);
+    foreach (var key in keys) Check(PropertyFields.For(key, "").Label != "追加設定（翻訳未登録）", "Missing translation: " + key);
+}));
+await Test("MOD JSON field edits preserve Unicode offsets, unknown data and arrays", () => Sync(() =>
+{
+    const string source = "{\"日本語\":\"保持\", \"server\": {\"enabled\":true, \"modpackName\":\"old\", \"syncedFiles\":[\"mods/**\"]}, \"unknown\":[1,{\"x\":2}], \"DO_NOT_CHANGE_IT\":3}";
+    var doc = new ModSettingDocument(source, ".json");
+    Check(doc.Fields.All(f => f.Key != "DO_NOT_CHANGE_IT" && f.Key != "x"));
+    var changes = doc.Fields.Where(f => f.Key is "modpackName" or "syncedFiles").ToDictionary(f => f.Id, f => f.Key == "modpackName" ? "日本語の構成" : "mods/**\nconfig/**");
+    var updated = doc.Apply(changes); var parsed = JsonNode.Parse(updated)!;
+    Check(parsed["server"]!["modpackName"]!.ToString() == "日本語の構成" && parsed["server"]!["syncedFiles"]!.AsArray().Count == 2);
+    Check(updated.StartsWith("{\"日本語\":\"保持\", ") && updated.Contains("\"unknown\":[1,{\"x\":2}], \"DO_NOT_CHANGE_IT\":3"));
+    Check(new ModSettingDocument(updated, ".json").Fields.Single(f => f.Key == "enabled").Group == "server");
+    Throws<IOException>(() => doc.Apply(new Dictionary<string, string> { ["missing"] = "1" }));
+}));
+await Test("MOD TOML value edits retain comments and reject unsafe scalar input", () => Sync(() =>
+{
+    const string source = "# original\r\n[general]\r\nenabled = true # keep\r\nport = 1234\r\nunknown = [1, 2]\r\nname = \"日本語\"\r\n";
+    var doc = new ModSettingDocument(source, ".toml");
+    var updated = doc.Apply(new Dictionary<string, string> { [doc.Fields.Single(f => f.Key == "enabled").Id] = "false" });
+    Check(updated == source.Replace("true", "false"));
+    Throws<IOException>(() => doc.Apply(new Dictionary<string, string> { [doc.Fields.Single(f => f.Key == "port").Id] = "1\nenabled=false" }));
+    Check(new ModSettingDocument("text = \"\"\"\nenabled = true\n\"\"\"", ".toml").Fields.Count == 0);
+}));
+await Test("MOD settings save has stale-file protection and configuration history", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("mod-form")); var p = store.Add("test"); using var runtime = new ServerRuntime();
+    var relative = Path.Combine("config", "test.json"); var path = Path.Combine(store.ServerDir(p), relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    const string original = "{\"enabled\":true,\"extra\":42}"; File.WriteAllText(path, original);
+    var doc = new ModSettingDocument(original, ".json"); var changes = new Dictionary<string, string> { [doc.Fields.Single(f => f.Key == "enabled").Id] = "false" };
+    var files = new ServerFiles(store, p, runtime); files.SaveModSettings(relative, original, changes);
+    Check(File.ReadAllText(path) == original.Replace("true", "false") && SafeFiles.Files(Path.Combine(store.Root, "file-history")).Any());
+    Throws<IOException>(() => files.SaveModSettings(relative, original, changes));
+}));
 await Test("Properties escape/continuation parsing and changed-key-only patching", () => Sync(() =>
 {
     var original = "# keep\r\n! comment\\\r\nmotd : \\u65e5\\u672c\\\r\n  \\u8a9e\r\ncustom\\:key = a\\=b\r\nmax-players=10\r\nmax-players:20\r\nunknown=unchanged";
