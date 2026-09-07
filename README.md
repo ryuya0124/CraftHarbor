@@ -6,9 +6,9 @@
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の `CraftHarbor-0.1.4-win-x64-portable.zip` を展開し、`CraftHarbor.exe` を実行してください。軽量版には **.NET 10 Desktop Runtime x64** が必要です。.NETがないPCでは `standalone.zip` を選べます。どちらも管理者権限不要です。
+[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の `CraftHarbor-0.1.5-win-x64-portable.zip` を展開し、`CraftHarbor.exe` を実行してください。軽量版には **.NET 10 Desktop Runtime x64** が必要です。.NETがないPCでは `standalone.zip` を選べます。どちらも管理者権限不要です。
 
-**v0.1.4 / プレビュー**。AutoModpackのサーバー設定編集・コンソール操作・併用ガイドを追加しました。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
+**v0.1.5 / プレビュー**。MOD設定の保存場所・形式を拡張し、プリセット切替で既存設定を残せるようにしました。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
 
 ## できること
 
@@ -23,7 +23,7 @@
 | MOD / plugins | ローカルJAR追加、有効・無効切替、フォルダ参照 |
 | Modrinth | MC・ローダーで絞り込むMOD検索、必須依存解決、導入予定確認、SHA512検証 |
 | MODパック | `.mrpack` の必須サーバーファイルとoverrides。Fabric指定版の引継ぎ |
-| プリセット | mods / plugins / configをZIP保存して切替。切替前に全体バックアップ |
+| プリセット | JAR・MOD設定をZIP保存。既存設定を維持／同名設定を復元。切替前に全体バックアップ |
 | 設定 | JSON / TOML / YAML / properties / txt / confを編集、JSON構文検証、旧版保存 |
 | バックアップ | 停止中の全体ZIP、ステージング復元、復元前フォルダの保存 |
 | 情報 | OS・論理CPU数・メモリ指標・ディスク空き・LAN IPv4・TCP待受・疎通 |

@@ -1,6 +1,6 @@
 # 対応表
 
-| 対象 | v0.1.3 | 備考 |
+| 対象 | v0.1.5 | 備考 |
 |---|---|---|
 | Windows x64 | 対応 | Windows 11 x64で検証。.NET 10対応OSが必要 |
 | ARM64 / Linux / macOS | 対象外 | ネイティブUIはWPF |
@@ -15,7 +15,7 @@
 | Modrinth MOD / Plugin | 検索・必須依存解決・取得 | Paper/Foliaはpluginsへ配置。既存MODの自動更新なし |
 | Modrinth mrpack | 制限付き対応 | Adrenaline 26.4.2+mc1.21.1.fabricを実検証。CDN・配置先制限、ローダー別途 |
 | CurseForge zip | 自動解決なし | 作者が提供する導入済みサーバーをコピー |
-| プリセット | 対応 | mods / plugins / configの実体ZIP |
+| プリセット | 対応 | JARと拡張設定範囲。既存優先／プリセット優先のマージ。[詳細](MOD_CONFIGURATIONS.md) |
 | バックアップ | 手動・停止中 | 復元20GB/10万エントリ上限 |
 | Javaインストーラー・PATH変更 | しない | ZIPを専用ディレクトリへ展開 |
 | Firewall / UPnP設定 | しない | 情報とTCP診断のみ |

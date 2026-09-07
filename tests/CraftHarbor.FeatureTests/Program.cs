@@ -197,7 +197,13 @@ internal static class Program
                         Tree(content).OfType<ListBox>().Single(b => b.Items.Contains(jarName + ".disabled")).SelectedItem = jarName + ".disabled"; await Click("有効 / 無効");
                         Check(File.Exists(Path.Combine(dir, folder, jarName)), "UI re-enable failed");
                         if (engine == "paper") await Edit("plugins/Chunky/config.yml", File.ReadAllText(Path.Combine(dir, "plugins/Chunky/config.yml")).Replace("language: ja", "language: en"));
-                        var backup = await Task.Run(() => files.ApplyPreset("enabled.zip"), ct);
+                        files.SaveConfiguration("config/added-after-preset.toml", "keep = true");
+                        files.SaveConfiguration("world/serverconfig/harbor-preserve.toml", "keep = true");
+                        await Task.Run(() => files.ApplyPreset("enabled.zip"), ct);
+                        Check(File.ReadAllText(Path.Combine(dir, "config/probe.json")).Contains("changed"), "Default preset erased existing settings");
+                        var backup = await Task.Run(() => files.ApplyPreset("enabled.zip", false), ct);
+                        Check(File.ReadAllText(Path.Combine(dir, "config/added-after-preset.toml")) == "keep = true" && File.Exists(Path.Combine(dir, "world/serverconfig/harbor-preserve.toml")), "Preset erased added settings");
+                        Record(engine, "preset-preserves-current-and-additional-settings-pass");
                         Check(File.Exists(backup) && File.Exists(Path.Combine(dir, folder, jarName)) && !File.Exists(Path.Combine(dir, folder, jarName + ".disabled")), "Preset JAR restore failed");
                         Check(File.ReadAllText(Path.Combine(dir, "config/probe.json")) == configBefore, "Preset config restore failed");
                         await Boot("preset-restored", true); await Stop();
@@ -208,7 +214,7 @@ internal static class Program
                         await Task.Run(() => files.SavePreset("public-pack"), ct);
                         var jarCount = Directory.GetFiles(Path.Combine(dir, "mods"), "*.jar").Length;
                         await Edit("config/probe.json", "{\"temporary\":true}");
-                        await Task.Run(() => files.ApplyPreset("public-pack.zip"), ct);
+                        await Task.Run(() => files.ApplyPreset("public-pack.zip", false), ct);
                         Check(Directory.GetFiles(Path.Combine(dir, "mods"), "*.jar").Length == jarCount && !File.ReadAllText(Path.Combine(dir, "config/probe.json")).Contains("temporary"), "Public pack preset failed");
                         await Boot("pack-restored", true); await Stop();
                         Record(engine, "public-pack-preset-restart-pass");
