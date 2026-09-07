@@ -6,9 +6,11 @@
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の `CraftHarbor-0.1.5-win-x64-portable.zip` を展開し、`CraftHarbor.exe` を実行してください。軽量版には **.NET 10 Desktop Runtime x64** が必要です。.NETがないPCでは `standalone.zip` を選べます。どちらも管理者権限不要です。
+[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の **`CraftHarbor-0.1.6-win-x64-setup.exe`** を実行してください。管理者権限不要、.NETランタイム同梱です。スタートメニューにCraftHarborとアンインストール項目を登録します。[インストール・更新・削除の手順](docs/INSTALLATION.md)。
 
-**v0.1.5 / プレビュー**。MOD設定の保存場所・形式を拡張し、プリセット切替で既存設定を残せるようにしました。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
+ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が必要、`standalone.zip` はランタイム同梱です。
+
+**v0.1.6 / プレビュー**。Windowsインストーラーとアンインストーラーに対応しました。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
 
 ## できること
 

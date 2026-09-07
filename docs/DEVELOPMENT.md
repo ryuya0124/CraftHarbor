@@ -70,3 +70,12 @@ mainを基準とし、変更はブランチ→PR→CIで管理します。CIはp
 - [Adoptium API](https://api.adoptium.net/q/swagger-ui/)：Temurinパッケージ、SHA256
 
 User-Agentは製品名・バージョン・GitHub URLを設定しています。API変更時はLiveTestsを使って確認します。
+
+
+## Windowsインストーラー
+
+`./scripts/package.ps1 -WithInstaller` でZIPに加えてsetup.exeを生成します。初回は公式GitHubのInno Setup 7.1.0 x64を取得し、固定SHA-256で検証してartifacts/toolsへユーザー単位で導入します。コンパイラーはビルド専用で、アプリへ同梱しません。
+
+`./scripts/test-installer.ps1` は、CraftHarborが未インストール・停止中のWindowsユーザーで実行します。実際のインストール登録を作成して削除するため、既存インストールを検出した場合は拒否します。artifacts内の専用フォルダ・専用スタートメニュー名を使い、Documents内の一時マーカーと既存profiles.jsonの保持を確認します。Minecraftを起動・停止する処理はありません。
+
+固定AppIdを更新間で維持してください。installer/CraftHarbor.issにはサーバーデータを削除する処理や、Javaを起動・停止するフックを追加しないでください。
