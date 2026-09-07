@@ -76,9 +76,9 @@ User-Agentは製品名・バージョン・GitHub URLを設定しています。
 
 `./scripts/package.ps1 -WithInstaller` でZIPに加えてsetup.exeを生成します。初回は公式GitHubのInno Setup 7.1.0 x64を取得し、固定SHA-256で検証してartifacts/toolsへユーザー単位で導入します。コンパイラーはビルド専用で、アプリへ同梱しません。
 
-`./scripts/test-installer.ps1` は、CraftHarborが未インストール・停止中のWindowsユーザーで実行します。実際のインストール登録を作成して削除するため、既存インストールを検出した場合は拒否します。artifacts内の専用フォルダ・専用スタートメニュー名を使い、Documents内の一時マーカーと既存profiles.jsonの保持を確認します。Minecraftを起動・停止する処理はありません。
+`./scripts/test-installer.ps1` は、CraftHelmが未インストール・停止中のWindowsユーザーで実行します。実際のインストール登録を作成して削除するため、既存インストールを検出した場合は拒否します。artifacts内の専用フォルダ・専用スタートメニュー名を使い、Documents内の一時マーカーと既存profiles.jsonの保持を確認します。Minecraftを起動・停止する処理はありません。
 
 固定AppIdを更新間で維持してください。installer/CraftHarbor.issにはサーバーデータを削除する処理や、Javaを起動・停止するフックを追加しないでください。
 
 
-インストーラーはartifacts/installedの.NET同梱・非単一ファイル・ReadyToRun版を使用します。単一ファイルのZIP版は引き続きartifacts/standaloneです。`scripts/measure-startup.ps1 -Executable artifacts/installed/CraftHarbor.exe`でプロセス開始から最初のウィンドウハンドルとメイン画面の検出までを計測できます。専用データ領域を使い、テストから起動したプロセスだけを正常終了します。既存CraftHarborが起動中の場合は拒否します。
+インストーラーはartifacts/installedの.NET同梱・非単一ファイル・ReadyToRun版を使用します。単一ファイルのZIP版は引き続きartifacts/standaloneです。`scripts/measure-startup.ps1 -Executable artifacts/installed/CraftHarbor.exe`でプロセス開始から最初のウィンドウハンドルとメイン画面の検出までを計測できます。専用データ領域を使い、テストから起動したプロセスだけを正常終了します。既存CraftHelmが起動中の場合は拒否します。

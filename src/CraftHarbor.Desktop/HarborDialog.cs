@@ -5,12 +5,12 @@ namespace CraftHarbor.Desktop;
 
 public static class HarborDialog
 {
-    public static MessageBoxResult Show(string text, string title = "CraftHarbor")
+    public static MessageBoxResult Show(string text, string title = "CraftHelm")
     {
         var dialog = Create(null, text, title, MessageBoxButton.OK, out var result);
         dialog.ShowDialog(); return result();
     }
-    public static MessageBoxResult Show(Window owner, string text, string title = "CraftHarbor", MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage image = MessageBoxImage.None)
+    public static MessageBoxResult Show(Window owner, string text, string title = "CraftHelm", MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage image = MessageBoxImage.None)
     {
         var dialog = Create(owner, text, title, buttons, out var result);
         dialog.ShowDialog(); return result();

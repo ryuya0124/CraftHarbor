@@ -36,6 +36,6 @@ jobs:
         run: ./scripts/measure-startup.ps1 -Executable artifacts/installed/CraftHarbor.exe -Runs 1
       - uses: actions/upload-artifact@v4
         with:
-          name: CraftHarbor-win-x64
+          name: CraftHelm-win-x64
           path: artifacts/packages/*
           retention-days: 14

@@ -52,20 +52,20 @@ public sealed class MainWindow : Window
     public MainWindow(HarborStore loadedStore)
     {
         store = loadedStore; updater = new UpdateManager(store.Root); updater.Changed += () => { if (updateStatus != null) updateStatus.Text = updater.Status; }; Theme.Load(store.Root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
-        Title = "CraftHarbor — マインクラフト サーバー管理"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Title = "CraftHelm — Minecraft Server Manager"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var layout = new Grid { Background = Brush("#0D141F") }; layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
         var sidebar = new DockPanel { Background = Brush("#111B29"), Margin = new Thickness(0) }; layout.Children.Add(sidebar);
         var brand = new StackPanel { Margin = new Thickness(22, 28, 18, 20) };
         var brandRow = new StackPanel { Orientation = Orientation.Horizontal };
         brandRow.Children.Add(new Image { Source = Theme.Icon, Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) });
-        brandRow.Children.Add(new TextBlock { Text = "CraftHarbor", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = Brush("#61DBC4"), VerticalAlignment = VerticalAlignment.Center }); brand.Children.Add(brandRow);
-        brand.Children.Add(new TextBlock { Text = "サーバーのための、小さな港。", FontSize = 10, Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 24) });
+        brandRow.Children.Add(new TextBlock { Text = "CraftHelm", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = Brush("#61DBC4"), VerticalAlignment = VerticalAlignment.Center }); brand.Children.Add(brandRow);
+        brand.Children.Add(new TextBlock { Text = "Minecraft Server Manager", FontSize = 10, Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 24) });
         brand.Children.Add(Btn("＋ サーバーを追加", AddServer, true)); brand.Children.Add(new TextBlock { Text = "サーバー", Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 12, 0, 8) });
         DockPanel.SetDock(brand, Dock.Top); sidebar.Children.Add(brand);
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Text("サーバーを選び、右側の分類から操作できます。", 12));
         footer.Children.Add(Btn("アプリ設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.9  •  Windows版", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(new TextBlock { Text = "v0.1.10  •  Windows版", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -145,7 +145,7 @@ public sealed class MainWindow : Window
         catch (Exception ex) { Error(ex); }
         finally { busy = false; servers.IsEnabled = true; operation.Dispose(); operation = null; }
     }
-    private void Error(Exception ex) { status.Text = "エラー: " + ex.Message; MessageBox.Show(this, ex.Message, "CraftHarbor", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    private void Error(Exception ex) { status.Text = "エラー: " + ex.Message; MessageBox.Show(this, ex.Message, "CraftHelm", MessageBoxButton.OK, MessageBoxImage.Warning); }
     private static void Open(string path) => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     private static TextBlock Text(string value, int size = 14) => new() { Text = value, FontSize = size, Margin = new Thickness(0, 0, 0, 12) };
     private TextBox Field(Panel parent, string label, string value, bool multiline = false)
@@ -160,12 +160,12 @@ public sealed class MainWindow : Window
     }
     private IProgress<string> Progress() => new Progress<string>(s => status.Text = s);
     private void Stopped(ServerProfile p) { if (Runtime(p).Running || Runtime(p).Busy) throw new InvalidOperationException("この操作はサーバー停止中に行ってください。"); }
-    private bool Confirm(string message) => MessageBox.Show(this, message, "CraftHarbor", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    private bool Confirm(string message) => MessageBox.Show(this, message, "CraftHelm", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
     private void Navigate(string key)
     {
         if (busy || (mayLeave != null && !mayLeave())) return; mayLeave = null; currentPage = key; page.Children.Clear(); console = null; updateStatus = null;
         RefreshNavigation(key);
-        title.Text = key switch { "java" => "Javaの管理", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
+        title.Text = key switch { "java" => "Javaの管理", "system" => "ネットワーク・システム", "help" => "CraftHelm ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
         var route = Routes.First(r => r.Key == key);
         subtitle.Text = route.Group + " › " + route.Label + (Selected is { } p ? $"  •  {JapaneseDisplay.Label(p.Engine)} / Minecraft {p.Version}" : "");
         if (key == "updates") { UpdatesPage(); return; } if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; } if (key == "appearance") { AppearancePage(); return; }
@@ -224,7 +224,7 @@ public sealed class MainWindow : Window
         foreach (var cmd in new[] { "list", "save-all", "whitelist list" }) controls.Children.Add(CommandButton(cmd, runtime));
         if (File.Exists(Path.Combine(store.ServerDir(p), "automodpack", "automodpack-server.json")))
             foreach (var cmd in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" }) controls.Children.Add(CommandButton(cmd, runtime));
-        page.Children.Add(controls); page.Children.Add(Text("画面は最大2,000行。完全な出力は logs に保存します。停止操作はCraftHarborが起動したプロセスだけが対象です。", 12));
+        page.Children.Add(controls); page.Children.Add(Text("画面は最大2,000行。完全な出力は logs に保存します。停止操作はCraftHelmが起動したプロセスだけが対象です。", 12));
     }
     private void Tick()
     {
@@ -588,14 +588,14 @@ public sealed class MainWindow : Window
         card.Children.Add(row);
         card.Children.Add(Text("入力欄・選択リスト・チェックボックス・スクロールバー・アプリ内ダイアログに適用します。Windowsのファイル選択画面など、OSが提供する画面はWindows側の表示設定に従います。", 12));
         card.Children.Add(new Image { Source = Theme.Icon, Width = 96, Height = 96, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 12) });
-        card.Children.Add(Text("CraftHarbor  •  ブロックと灯台を組み合わせたアプリアイコン", 12));
+        card.Children.Add(Text("CraftHelm  •  ブロックと灯台を組み合わせたアプリアイコン", 12));
     }
     private void HelpPage()
     {
         var card = Card(page, "はじめに"); card.Children.Add(Text("サーバー追加 → 起動設定 → 本体導入 → Javaの導入・割り当て → EULA同意 → 起動。\nコンソールに Done が出たら接続できます。サーバーはアプリ終了前に停止してください。\n複数サーバーは異なるポートで起動してください。"));
         card.Children.Add(Text("Forge / NeoForge / Quilt / 独自JARは、事前導入したサーバーフォルダをコピーし、Javaと起動引数を設定します。CurseForge形式の自動解決、Bedrock専用サーバー、UPnP、自動スケジュール、遠隔操作は本版の対応外です。"));
         card.Children.Add(Text("MODは実行コードです。作者と対応環境を確認して導入してください。Modrinthの必須依存は解決しますが、既存MODとの全互換性は保証しません。\nバックアップ・ログの自動削除はしません。空き容量はシステム画面で確認できます。"));
-        card.Children.Add(Btn("日本語ドキュメント（GitHub）", () => Open("https://github.com/ryuya0124/CraftHarbor/tree/main/docs")));
+        card.Children.Add(Btn("日本語ドキュメント（GitHub）", () => Open("https://github.com/ryuya0124/CraftHelm/tree/main/docs")));
         card.Children.Add(Btn("データフォルダ", () => Open(store.Root))); card.Children.Add(Text("保存先: " + store.Root, 12));
     }
     public void BeginUpdateChecks() => updater.Start();
@@ -613,12 +613,12 @@ public sealed class MainWindow : Window
             if (!updater.IsReady) { status.Text = "更新のダウンロードが完了していません。"; return; }
             restartForUpdate = true; Close(); restartForUpdate = false;
         }, true));
-        card.Children.Add(Btn("リリース情報", () => Open("https://github.com/ryuya0124/CraftHarbor/releases")));
+        card.Children.Add(Btn("リリース情報", () => Open("https://github.com/ryuya0124/CraftHelm/releases")));
         card.Children.Add(Text("プレビューリリースも対象です。ZIP版は確認のみで、インストーラーから更新できます。通信に失敗してもサーバー管理は継続できます。", 12));
     }
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (busy || runtimes.Values.Any(r => r.Busy || r.Running)) { e.Cancel = true; MessageBox.Show(this, "処理の完了と、CraftHarborから起動したサーバーの停止を確認してから閉じてください。", "CraftHarbor"); return; }
+        if (busy || runtimes.Values.Any(r => r.Busy || r.Running)) { e.Cancel = true; MessageBox.Show(this, "処理の完了と、CraftHelmから起動したサーバーの停止を確認してから閉じてください。", "CraftHelm"); return; }
         if (mayLeave != null && !mayLeave()) { e.Cancel = true; return; }
         if (updater.IsReady && (updater.Enabled || restartForUpdate))
         {

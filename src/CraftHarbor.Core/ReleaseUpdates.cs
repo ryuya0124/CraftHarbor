@@ -11,9 +11,9 @@ public sealed record ReleaseUpdate(string Version, string FileName, long Install
 
 public sealed class ReleaseUpdates : IDisposable
 {
-    public const string Repository = "ryuya0124/CraftHarbor";
+    public const string Repository = "ryuya0124/CraftHelm";
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(5) };
-    public ReleaseUpdates() { http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHarbor-Updater/1.0"); }
+    public ReleaseUpdates() { http.DefaultRequestHeaders.UserAgent.ParseAdd("CraftHelm-Updater/1.0"); }
     public static ReleaseUpdate? Select(string json, Version current)
     {
         var candidates = new List<ReleaseUpdate>();
@@ -22,9 +22,10 @@ public sealed class ReleaseUpdates : IDisposable
             if (release?["draft"]?.GetValue<bool>() != false) continue;
             var tag = release["tag_name"]?.ToString() ?? "";
             if (!Regex.IsMatch(tag, @"^v\d+\.\d+\.\d+$") || !Version.TryParse(tag[1..], out var version) || version <= new Version(current.Major, current.Minor, Math.Max(0, current.Build))) continue;
-            var fileName = $"CraftHarbor-{version}-win-x64-setup.exe";
+            var fileName = $"CraftHelm-{version}-win-x64-setup.exe";
             var assets = release["assets"]?.AsArray();
             var setup = assets?.SingleOrDefault(a => a?["name"]?.ToString() == fileName);
+            if (setup == null) { fileName = $"CraftHarbor-{version}-win-x64-setup.exe"; setup = assets?.SingleOrDefault(a => a?["name"]?.ToString() == fileName); }
             var sums = assets?.SingleOrDefault(a => a?["name"]?.ToString() == "SHA256SUMS.txt");
             if (setup == null || sums == null) continue;
             long size = setup["size"]!.GetValue<long>(), installerId = setup["id"]!.GetValue<long>(), checksumId = sums["id"]!.GetValue<long>();

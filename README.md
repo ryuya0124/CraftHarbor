@@ -1,19 +1,19 @@
-# ◈ CraftHarbor
+# ◈ CraftHelm（クラフトヘルム）
 
 > **開発途中のプレビュー版です。利用は自己責任でお願いします。** 不具合による停止やデータ損失の可能性があります。重要なワールドは別の場所にもバックアップし、まずテスト用サーバーで確認してください。すべてのMOD・バージョンへの対応は保証しません。
 
 
-**サーバーのための、小さな港。** Windows向けのMinecraft Java Editionサーバー管理アプリです。C# / WPFで作り、ブラウザエンジンやNode.jsを同梱しません。
+**Minecraft Server Manager — Minecraftサーバーを管理するWindowsアプリ。** Java Editionに対応。C# / WPFで作り、ブラウザエンジンやNode.jsを同梱しません。
 
-![CraftHarbor overview](docs/images/overview.png)
+旧名称はCraftHarborです。既存データと自動更新の互換性のため、内部の実行ファイル名・保存先は引き継ぎます。
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/ryuya0124/CraftHarbor/releases) の **`CraftHarbor-0.1.9-win-x64-setup.exe`** を実行してください。管理者権限不要、.NETランタイム同梱です。スタートメニューにCraftHarborとアンインストール項目を登録します。[インストール・更新・削除の手順](docs/INSTALLATION.md)。
+[GitHub Releases](https://github.com/ryuya0124/CraftHelm/releases) の **`CraftHelm-0.1.10-win-x64-setup.exe`** を実行してください。管理者権限不要、.NETランタイム同梱です。スタートメニューにCraftHelmとアンインストール項目を登録します。[インストール・更新・削除の手順](docs/INSTALLATION.md)。
 
 ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が必要、`standalone.zip` はランタイム同梱です。
 
-**v0.1.9 / プレビュー**。設定画面を日本語名と用途別の階層に整理し、AutoModpackなどの[MOD設定GUI](docs/JAPANESE_SETTINGS.md)を追加しました。[server.propertiesのGUI設定](docs/SERVER_PROPERTIES.md)と[GitHub Releasesによる自動更新](docs/UPDATES.md)に対応しました。起動時にローディング画面を先に表示し、バックグラウンドでサーバー一覧を読み込みます。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
+**v0.1.10 / プレビュー**。名称を変更しました。[命名調査と移行について](docs/NAME_RESEARCH.md)。設定画面を日本語名と用途別の階層に整理し、AutoModpackなどの[MOD設定GUI](docs/JAPANESE_SETTINGS.md)を追加しました。[server.propertiesのGUI設定](docs/SERVER_PROPERTIES.md)と[GitHub Releasesによる自動更新](docs/UPDATES.md)に対応しました。起動時にローディング画面を先に表示し、バックグラウンドでサーバー一覧を読み込みます。[MOD設定の保持](docs/MOD_CONFIGURATIONS.md)。[AutoModpackとの併用](docs/AUTOMODPACK.md) / [MOD・設定の検証記録](docs/FEATURE_VALIDATION.md) / [サーバー本体の検証記録](docs/REAL_SERVER_VALIDATION.md)。すべてのMOD・パック・サーバー実装を自動的に扱える製品ではありません。
 
 ## できること
 
@@ -44,7 +44,7 @@ ZIP版も利用できます。`portable.zip` は.NET 10 Desktop Runtime x64が�
 4. 起動設定でメモリ・ポートを調整し、Minecraft EULAを読んで同意します。
 5. 「概要」から起動。「コンソール」の `Done` を確認して接続します。
 
-既存サーバーを遊びながらCraftHarborを試せます。**別アプリから起動されたJavaプロセスには接続・停止しません。** 既存フォルダを取り込む場合だけ、元のサーバーを停止できる時間にコピーしてください。
+既存サーバーを遊びながらCraftHelmを試せます。**別アプリから起動されたJavaプロセスには接続・停止しません。** 既存フォルダを取り込む場合だけ、元のサーバーを停止できる時間にコピーしてください。
 
 ## ドキュメント
 
@@ -72,4 +72,4 @@ dotnet run --project tests/CraftHarbor.UiTests -c Release
 
 ## ライセンス
 
-CraftHarborのコードはMIT。Minecraft、MOD、Java等のダウンロード物には各配布元のライセンス・EULAが適用されます。Mojang / Microsoftの公式製品ではありません。ServerStarter2のコード・画像を流用していません。
+CraftHelmのコードはMIT。Minecraft、MOD、Java等のダウンロード物には各配布元のライセンス・EULAが適用されます。Mojang / Microsoftの公式製品ではありません。ServerStarter2のコード・画像を流用していません。

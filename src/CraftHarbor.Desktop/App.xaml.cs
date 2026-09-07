@@ -11,7 +11,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         instance = new Mutex(true, "Local\\CraftHarbor.Desktop", out var created);
-        if (!created) { MessageBox.Show("CraftHarborはすでに開いています。"); Shutdown(); return; }
+        if (!created) { MessageBox.Show("CraftHelmはすでに開いています。"); Shutdown(); return; }
         try
         {
             var root = Environment.GetEnvironmentVariable("CRAFTHARBOR_DATA") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CraftHarbor", "data");
@@ -28,7 +28,7 @@ public partial class App : Application
             loading.ContentRendered += rendered;
             loading.Show();
         }
-        catch (Exception ex) { MessageBox.Show("起動できませんでした。既存データはそのままです。\n" + ex.Message, "CraftHarbor"); Shutdown(1); }
+        catch (Exception ex) { MessageBox.Show("起動できませんでした。既存データはそのままです。\n" + ex.Message, "CraftHelm"); Shutdown(1); }
     }
     protected override void OnExit(ExitEventArgs e) { instance?.Dispose(); base.OnExit(e); }
 }
