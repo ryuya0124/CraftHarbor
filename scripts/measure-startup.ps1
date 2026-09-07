@@ -17,7 +17,7 @@ for ($i = 0; $i -lt $Runs; $i++) {
         while ($watch.Elapsed.TotalSeconds -lt 20 -and -not $process.HasExited) {
             $process.Refresh()
             if ($null -eq $first -and $process.MainWindowHandle -ne [IntPtr]::Zero) { $first = $watch.ElapsedMilliseconds }
-            if ($process.MainWindowTitle -like '*Minecraft Server Control*') { $ready = $watch.ElapsedMilliseconds; break }
+            if ($process.MainWindowTitle -like '*Minecraft Server Control*' -or $process.MainWindowTitle -like '*マインクラフト サーバー管理*') { $ready = $watch.ElapsedMilliseconds; break }
             Start-Sleep -Milliseconds 10
         }
         if ($null -eq $ready) { throw 'Application did not reach main window within 20 seconds' }

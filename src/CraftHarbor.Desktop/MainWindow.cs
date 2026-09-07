@@ -23,6 +23,14 @@ public sealed class MainWindow : Window
     private readonly Dictionary<string, ServerRuntime> runtimes = [];
     private readonly ListBox servers = new();
     private readonly StackPanel page = new();
+    private readonly WrapPanel navigationGroups = new() { Name = "NavigationGroups" };
+    private readonly WrapPanel navigationPages = new() { Name = "NavigationPages" };
+    private static readonly (string Group, string Label, string Key)[] Routes = [
+        ("運用", "概要", "overview"), ("運用", "コンソール", "console"), ("運用", "バックアップ", "backups"),
+        ("サーバー設定", "起動・導入", "launch"), ("サーバー設定", "ゲーム・接続", "properties"), ("サーバー設定", "Javaの管理", "java"),
+        ("MOD・プラグイン", "導入・構成", "mods"), ("MOD・プラグイン", "MODの設定", "modsettings"), ("MOD・プラグイン", "詳細なテキスト編集", "files"),
+        ("アプリ設定", "表示", "appearance"), ("アプリ設定", "更新", "updates"), ("アプリ設定", "接続診断・PC情報", "system"), ("アプリ設定", "ガイド・保存場所", "help")
+    ];
     private readonly TextBlock title = new() { FontSize = 28, FontWeight = FontWeights.Bold };
     private readonly TextBlock subtitle = new() { Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 20) };
     private readonly TextBlock status = new() { Text = "準備完了  •  データはこのPCに保存", Foreground = Brush("#61DBC4"), VerticalAlignment = VerticalAlignment.Center };
@@ -44,20 +52,20 @@ public sealed class MainWindow : Window
     public MainWindow(HarborStore loadedStore)
     {
         store = loadedStore; updater = new UpdateManager(store.Root); updater.Changed += () => { if (updateStatus != null) updateStatus.Text = updater.Status; }; Theme.Load(store.Root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
-        Title = "CraftHarbor — Minecraft Server Control"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Title = "CraftHarbor — マインクラフト サーバー管理"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var layout = new Grid { Background = Brush("#0D141F") }; layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
         var sidebar = new DockPanel { Background = Brush("#111B29"), Margin = new Thickness(0) }; layout.Children.Add(sidebar);
         var brand = new StackPanel { Margin = new Thickness(22, 28, 18, 20) };
         var brandRow = new StackPanel { Orientation = Orientation.Horizontal };
         brandRow.Children.Add(new Image { Source = Theme.Icon, Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) });
         brandRow.Children.Add(new TextBlock { Text = "CraftHarbor", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = Brush("#61DBC4"), VerticalAlignment = VerticalAlignment.Center }); brand.Children.Add(brandRow);
-        brand.Children.Add(new TextBlock { Text = "YOUR WORLDS. YOUR CONTROL.", FontSize = 10, Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 24) });
+        brand.Children.Add(new TextBlock { Text = "サーバーのための、小さな港。", FontSize = 10, Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 8, 0, 24) });
         brand.Children.Add(Btn("＋ サーバーを追加", AddServer, true)); brand.Children.Add(new TextBlock { Text = "サーバー", Foreground = Brush("#91A3B8"), Margin = new Thickness(0, 12, 0, 8) });
         DockPanel.SetDock(brand, Dock.Top); sidebar.Children.Add(brand);
         var footer = new StackPanel { Margin = new Thickness(20) };
-        footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
-        footer.Children.Add(Btn("表示設定", () => Navigate("appearance"))); footer.Children.Add(Btn("アプリの更新", () => Navigate("updates")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.8  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(Text("サーバーを選び、右側の分類から操作できます。", 12));
+        footer.Children.Add(Btn("アプリ設定", () => Navigate("appearance")));
+        footer.Children.Add(new TextBlock { Text = "v0.1.9  •  Windows版", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {
@@ -72,8 +80,7 @@ public sealed class MainWindow : Window
         };
         var main = new DockPanel { Margin = new Thickness(30, 26, 30, 16) }; Grid.SetColumn(main, 1); layout.Children.Add(main);
         var header = new StackPanel(); header.Children.Add(title); header.Children.Add(subtitle); DockPanel.SetDock(header, Dock.Top); main.Children.Add(header);
-        var nav = new WrapPanel();
-        foreach (var (label, key) in new[] { ("概要", "overview"), ("コンソール", "console"), ("起動設定", "launch"), ("サーバー設定", "properties"), ("MOD / パック", "mods"), ("設定ファイル", "files"), ("バックアップ", "backups") }) nav.Children.Add(Btn(label, () => Navigate(key)));
+        var nav = new StackPanel(); nav.Children.Add(navigationGroups); nav.Children.Add(navigationPages);
         DockPanel.SetDock(nav, Dock.Top); main.Children.Add(nav);
         var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
         var cancel = Btn("処理をキャンセル", () => operation?.Cancel()); DockPanel.SetDock(cancel, Dock.Right); bottom.Children.Add(cancel); bottom.Children.Add(status);
@@ -92,6 +99,44 @@ public sealed class MainWindow : Window
         button.Click += (_, _) => { if (busy && text != "処理をキャンセル") { status.Text = "処理中です。完了を待つかキャンセルしてください。"; return; } try { action(); } catch (Exception ex) { Error(ex); } }; return button;
     }
     private Button AsyncBtn(string text, Func<CancellationToken, Task> action, bool accent = false) => Btn(text, () => _ = Run(action), accent);
+    private Button CommandButton(string command, ServerRuntime runtime)
+    {
+        var button = AsyncBtn(JapaneseDisplay.Label(command), async _ => await runtime.SendAsync(command));
+        button.Tag = command; button.ToolTip = "送信するコマンド: " + command; return button;
+    }
+    private void RefreshNavigation(string key)
+    {
+        var selected = Routes.First(r => r.Key == key);
+        navigationGroups.Children.Clear(); navigationPages.Children.Clear();
+        foreach (var group in Routes.Select(r => r.Group).Distinct())
+        {
+            var button = Btn(group, () => Navigate(Routes.First(r => r.Group == group).Key), group == selected.Group);
+            button.Tag = group; navigationGroups.Children.Add(button);
+        }
+        foreach (var route in Routes.Where(r => r.Group == selected.Group))
+        {
+            var button = Btn(route.Label, () => Navigate(route.Key)); button.Tag = route.Key;
+            button.FontWeight = route.Key == key ? FontWeights.Bold : FontWeights.Normal;
+            navigationPages.Children.Add(button);
+        }
+    }
+    private void OrganizeCards(string? first = null)
+    {
+        var cards = page.Children.OfType<Border>().Where(b => b.Child is StackPanel).ToArray();
+        var selector = new WrapPanel { Name = "SectionCategories", Margin = new Thickness(0, 8, 0, 0) };
+        page.Children.Insert(0, selector);
+        void Select(Border selected)
+        {
+            foreach (var card in cards) card.Visibility = card == selected ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var button in selector.Children.OfType<Button>()) button.FontWeight = ReferenceEquals(button.Tag, selected) ? FontWeights.Bold : FontWeights.Normal;
+        }
+        foreach (var card in cards)
+        {
+            var label = ((StackPanel)card.Child).Children.OfType<TextBlock>().First().Text;
+            var button = Btn(label, () => Select(card)); button.Tag = card; selector.Children.Add(button);
+        }
+        if (cards.Length > 0) Select(cards.FirstOrDefault(c => ((StackPanel)c.Child).Children.OfType<TextBlock>().First().Text == first) ?? cards[0]);
+    }
     private async Task Run(Func<CancellationToken, Task> action)
     {
         if (busy) return; busy = true; servers.IsEnabled = false; operation = new CancellationTokenSource(); status.Text = "処理中…";
@@ -106,7 +151,7 @@ public sealed class MainWindow : Window
     private TextBox Field(Panel parent, string label, string value, bool multiline = false)
     {
         parent.Children.Add(new TextBlock { Text = label, Foreground = Brush("#AAB9CA") });
-        var box = new TextBox { Text = value, AcceptsReturn = multiline, MinHeight = multiline ? 88 : 0, VerticalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden }; parent.Children.Add(box); return box;
+        var box = new TextBox { Text = value, AcceptsReturn = multiline, MinHeight = multiline ? 88 : 0, VerticalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden }; System.Windows.Automation.AutomationProperties.SetName(box, label); parent.Children.Add(box); return box;
     }
     private static StackPanel Card(Panel parent, string heading)
     {
@@ -119,11 +164,13 @@ public sealed class MainWindow : Window
     private void Navigate(string key)
     {
         if (busy || (mayLeave != null && !mayLeave())) return; mayLeave = null; currentPage = key; page.Children.Clear(); console = null; updateStatus = null;
-        title.Text = key switch { "java" => "Java ランタイム", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
-        subtitle.Text = Selected is { } p ? $"{p.Engine.ToUpperInvariant()}  /  Minecraft {p.Version}  /  localhost:{p.Port}" : "サーバー、Java、MOD、ワールドをひとつの場所に。";
+        RefreshNavigation(key);
+        title.Text = key switch { "java" => "Javaの管理", "system" => "ネットワーク・システム", "help" => "CraftHarbor ガイド", "appearance" => "表示設定", _ => Selected?.Name ?? "サーバーのための、小さな港。" };
+        var route = Routes.First(r => r.Key == key);
+        subtitle.Text = route.Group + " › " + route.Label + (Selected is { } p ? $"  •  {JapaneseDisplay.Label(p.Engine)} / Minecraft {p.Version}" : "");
         if (key == "updates") { UpdatesPage(); return; } if (key == "java") { JavaPage(); return; } if (key == "system") { SystemPage(); return; } if (key == "help") { HelpPage(); return; } if (key == "appearance") { AppearancePage(); return; }
         if (Selected == null) { Welcome(); return; }
-        switch (key) { case "console": ConsolePage(); break; case "launch": LaunchPage(); break; case "mods": ModsPage(); break; case "properties": PropertiesPage(); break; case "files": FilesPage(); break; case "backups": BackupsPage(); break; default: Overview(); break; }
+        switch (key) { case "console": ConsolePage(); break; case "launch": LaunchPage(); break; case "mods": ModsPage(); break; case "modsettings": ModSettingsPage(); break; case "properties": PropertiesPage(); break; case "files": FilesPage(); break; case "backups": BackupsPage(); break; default: Overview(); break; }
     }
     private void Welcome()
     {
@@ -135,7 +182,7 @@ public sealed class MainWindow : Window
     }
     private void AddServer()
     {
-        var name = Ask("サーバー名", "My Minecraft Server"); if (string.IsNullOrWhiteSpace(name)) return;
+        var name = Ask("サーバー名", "マイサーバー"); if (string.IsNullOrWhiteSpace(name)) return;
         var p = store.Add(name); RefreshServers(p); Navigate("launch");
     }
     private string? Ask(string label, string initial)
@@ -153,7 +200,7 @@ public sealed class MainWindow : Window
         row.Children.Add(AsyncBtn("■ 安全に停止", async _ => await runtime.StopAsync()));
         row.Children.Add(AsyncBtn("↻ 再起動", async _ => { await runtime.StopAsync(); Start(p); }));
         row.Children.Add(Btn("フォルダを開く", () => Open(store.ServerDir(p)))); card.Children.Add(row); if (metrics.Parent is Panel previous) previous.Children.Remove(metrics); card.Children.Add(metrics);
-        var info = Card(page, "このサーバーの構成"); info.Children.Add(Text($"種類: {p.Engine}   Minecraft: {p.Version}\nメモリ: {p.MinMemoryMb} – {p.MaxMemoryMb} MB\nJava: {p.JavaPath}\n起動: {(p.LaunchArgs.Length == 0 ? p.Jar : string.Join(" ", p.LaunchArgs))}\n保存先: {store.ServerDir(p)}"));
+        var info = Card(page, "このサーバーの構成"); info.Children.Add(Text($"種類: {JapaneseDisplay.Label(p.Engine)}   Minecraft: {p.Version}\nメモリ: {p.MinMemoryMb} – {p.MaxMemoryMb} MB\nJava: {p.JavaPath}\n起動: {(p.LaunchArgs.Length == 0 ? p.Jar : string.Join(" ", p.LaunchArgs))}\n保存先: {store.ServerDir(p)}"));
         info.Children.Add(Text("起動前にJavaとMODの対応バージョンを確認してください。Java要件はサーバーのダウンロード後に表示します。"));
         var tools = Card(page, "クイック操作");
         var actions = new WrapPanel(); actions.Children.Add(AsyncBtn("停止中バックアップ", async ct => { Stopped(p); var path = await Task.Run(() => SafeFiles.Snapshot(store.ServerDir(p), store.BackupDir(p)), ct); MessageBox.Show(this, path, "バックアップ保存"); }));
@@ -174,9 +221,9 @@ public sealed class MainWindow : Window
         async Task Send(CancellationToken _) { await runtime.SendAsync(command.Text); command.Clear(); }
         command.KeyDown += (_, e) => { if (e.Key == Key.Enter && !busy) { e.Handled = true; _ = Run(Send); } };
         var controls = new WrapPanel(); controls.Children.Add(AsyncBtn("送信 ↵", Send, true));
-        foreach (var cmd in new[] { "list", "save-all", "whitelist list" }) controls.Children.Add(AsyncBtn(cmd, async _ => await runtime.SendAsync(cmd)));
+        foreach (var cmd in new[] { "list", "save-all", "whitelist list" }) controls.Children.Add(CommandButton(cmd, runtime));
         if (File.Exists(Path.Combine(store.ServerDir(p), "automodpack", "automodpack-server.json")))
-            foreach (var cmd in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" }) controls.Children.Add(AsyncBtn(cmd, async _ => await runtime.SendAsync(cmd)));
+            foreach (var cmd in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" }) controls.Children.Add(CommandButton(cmd, runtime));
         page.Children.Add(controls); page.Children.Add(Text("画面は最大2,000行。完全な出力は logs に保存します。停止操作はCraftHarborが起動したプロセスだけが対象です。", 12));
     }
     private void Tick()
@@ -194,15 +241,15 @@ public sealed class MainWindow : Window
         }
         if (Selected is { } p)
         {
-            var r = Runtime(p); metrics.Text = $"{(r.Running ? r.Ready ? "● 稼働中" : "● 起動中 / ログを確認" : "○ 停止中")}   PID {r.Pid?.ToString() ?? "—"}   RAM {r.WorkingSet / 1048576d:F0} MB";
+            var r = Runtime(p); metrics.Text = $"{(r.Running ? r.Ready ? "● 稼働中" : "● 起動中 / ログを確認" : "○ 停止中")}   プロセス番号 {r.Pid?.ToString() ?? "—"}   メモリ {r.WorkingSet / 1048576d:F0} MB";
         }
     }
     private void LaunchPage()
     {
         var p = Selected!; var card = Card(page, "起動プロファイル");
         var name = Field(card, "名前", p.Name);
-        card.Children.Add(Text("種類（Forge / NeoForge等は、導入済みフォルダのコピー＋カスタム引数で起動）", 12));
-        var engine = new ComboBox { Name = "ServerEngine", ItemsSource = new[] { "vanilla", "paper", "fabric", "folia", "forge", "neoforge", "quilt", "custom" }, SelectedItem = p.Engine }; card.Children.Add(engine);
+        card.Children.Add(Text("サーバーの種類（Forge / NeoForgeは導入済みサーバーを取り込みます）", 12));
+        var engine = new ComboBox { Name = "ServerEngine", ItemsSource = new[] { "vanilla", "paper", "fabric", "folia", "forge", "neoforge", "quilt", "custom" }, SelectedItem = p.Engine }; JapaneseDisplay.Apply(engine); card.Children.Add(engine);
         var version = Field(card, "Minecraft バージョン", p.Version);
         var fabricFields = new StackPanel { Name = "FabricSettings" }; card.Children.Add(fabricFields);
         var loaderVersion = Field(fabricFields, "Fabricローダーバージョン（空欄で最新安定版・パック指定版も入力可能）", p.Engine == "fabric" ? p.LoaderVersion : "");
@@ -230,14 +277,17 @@ public sealed class MainWindow : Window
             };
         }
         engine.SelectionChanged += (_, _) => UpdateEngineFields(); UpdateEngineFields();
-        var java = Field(card, "java.exe のパス（Java画面からインストールできます）", p.JavaPath);
+        card = Card(page, "Java・メモリ・接続");
+        var java = Field(card, "Java実行ファイルの場所", p.JavaPath);
         card.Children.Add(Btn("java.exe を選択", () => { var file = Pick("Java|java.exe"); if (file != null) java.Text = file; }));
         var min = Field(card, "最小メモリ MB", p.MinMemoryMb.ToString()); var max = Field(card, "最大メモリ MB", p.MaxMemoryMb.ToString()); var port = Field(card, "サーバーポート", p.Port.ToString());
-        var jar = Field(card, "JAR 相対パス", p.Jar);
-        var jvm = Field(card, "追加JVM引数（1行に1引数・引用符は不要）", string.Join(Environment.NewLine, p.JvmArgs), true);
-        var args = Field(card, "カスタム起動引数（1行に1引数・空欄なら -jar / nogui）", string.Join(Environment.NewLine, p.LaunchArgs), true);
+        card = Card(page, "詳細な起動引数");
+        var jar = Field(card, "サーバー本体ファイル（サーバーフォルダ内の場所）", p.Jar);
+        var jvm = Field(card, "Javaへの追加オプション（1行に1つ・引用符不要）", string.Join(Environment.NewLine, p.JvmArgs), true);
+        var args = Field(card, "サーバーへの起動オプション（1行に1つ・通常は空欄）", string.Join(Environment.NewLine, p.LaunchArgs), true);
         card.Children.Add(Text("Forge / NeoForge例: @libraries/net/neoforged/neoforge/…/win_args.txt と nogui を別々の行に指定。シェル / BATは実行しません。", 12));
-        var eula = new CheckBox { Content = "Minecraft EULAを読み、このサーバーでの利用に同意する", IsChecked = p.EulaAccepted }; card.Children.Add(eula); card.Children.Add(Btn("Minecraft EULAを開く", () => Open("https://www.minecraft.net/eula")));
+        card = Card(page, "利用規約・保存");
+        var eula = new CheckBox { Content = "Minecraftの利用規約を読み、このサーバーでの利用に同意する", IsChecked = p.EulaAccepted }; card.Children.Add(eula); card.Children.Add(Btn("Minecraftの利用規約を開く", () => Open("https://www.minecraft.net/eula")));
         void Save()
         {
             Stopped(p);
@@ -272,6 +322,7 @@ public sealed class MainWindow : Window
             finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
             MessageBox.Show(this, "コピーしました。JARパスまたはカスタム起動引数とJavaを設定してください。");
         }));
+        OrganizeCards();
     }
     private static string[] Lines(string value) => value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     private string? Pick(string filter) { var dialog = new OpenFileDialog { Filter = filter }; return dialog.ShowDialog(this) == true ? dialog.FileName : null; }
@@ -310,10 +361,10 @@ public sealed class MainWindow : Window
         var sync = Card(page, "AutoModpack • クライアントへMOD構成を同期");
         var autoConfig = Path.Combine(root, "automodpack", "automodpack-server.json");
         sync.Children.Add(Text(File.Exists(autoConfig) ? "AutoModpackのサーバー設定を検出しました。設定ファイル画面で編集できます。" : "対応するAutoModpackをサーバーとクライアントへ導入します。初回起動後に生成されるサーバー設定を編集できます。"));
-        sync.Children.Add(Text("同期対象はAutoModpackのsyncedFilesと配布専用フォルダで管理します。MOD・設定変更後はコンソールの automodpack generate で同期データを再生成してください。", 12));
+        sync.Children.Add(Text("同期対象ファイルと配布専用フォルダを設定して管理します。MOD・設定変更後はコンソールの「同期データを再生成」を実行してください。", 12));
         sync.Children.Add(Text("構成プリセットにはAutoModpackのサーバー設定も保存します。配布ファイル・鍵は全体バックアップで保管してください。", 12));
-        var syncRow = new WrapPanel(); syncRow.Children.Add(Btn("設定ファイルへ", () => Navigate("files"))); syncRow.Children.Add(Btn("コンソールへ", () => Navigate("console"))); syncRow.Children.Add(Btn("AutoModpack公式ガイド", () => Open("https://github.com/Skidamek/AutoModpack/blob/main/docs/quick-start.mdx"))); sync.Children.Add(syncRow);
-        var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedItem = p.Engine is "paper" or "folia" ? "plugins" : "mods" }; local.Children.Add(folder);
+        var syncRow = new WrapPanel(); syncRow.Children.Add(Btn("同期の設定を開く", () => Navigate("modsettings"))); syncRow.Children.Add(Btn("コンソールへ", () => Navigate("console"))); syncRow.Children.Add(Btn("AutoModpack公式ガイド", () => Open("https://github.com/Skidamek/AutoModpack/blob/main/docs/quick-start.mdx"))); sync.Children.Add(syncRow);
+        var local = Card(page, "MOD / プラグイン"); var folder = new ComboBox { ItemsSource = new[] { "mods", "plugins" }, SelectedItem = p.Engine is "paper" or "folia" ? "plugins" : "mods" }; JapaneseDisplay.Apply(folder); local.Children.Add(folder);
         var list = new ListBox { Height = 150 }; local.Children.Add(list);
         string Target() => Path.Combine(root, folder.SelectedItem.ToString()!);
         void Refresh() { Directory.CreateDirectory(Target()); list.ItemsSource = Directory.EnumerateFiles(Target()).Where(f => f.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jar.disabled", StringComparison.OrdinalIgnoreCase)).Select(Path.GetFileName).Order().ToArray(); }
@@ -321,7 +372,7 @@ public sealed class MainWindow : Window
         var row = new WrapPanel(); row.Children.Add(Btn("JARを追加", () => { Stopped(p); var dialog = new OpenFileDialog { Filter = "MOD / Plugin|*.jar", Multiselect = true }; if (dialog.ShowDialog(this) != true) return; new ServerFiles(store, p, Runtime(p)).AddJars(folder.SelectedItem.ToString()!, dialog.FileNames); Refresh(); }));
         row.Children.Add(Btn("有効 / 無効", () => { Stopped(p); var name = list.SelectedItem?.ToString() ?? throw new IOException("ファイルを選択してください。"); new ServerFiles(store, p, Runtime(p)).ToggleJar(folder.SelectedItem.ToString()!, name); Refresh(); }));
         row.Children.Add(Btn("フォルダ", () => Open(Target()))); local.Children.Add(row);
-        var preset = Card(page, "構成プリセット"); preset.Children.Add(Text("MOD・プラグインJARと設定を保存。defaultconfigs・ワールド直下のserverconfig・KubeJS・scriptsにも対応。切替前に全体をバックアップします。"));
+        var preset = Card(page, "構成プリセット"); preset.Children.Add(Text("MOD・プラグイン本体と共通設定・ワールド別設定・スクリプトを保存。切替前に全体をバックアップします。"));
         var keepSettings = new CheckBox { Content = "現在の設定を維持（未配置の設定だけ追加）", IsChecked = true }; preset.Children.Add(keepSettings);
         preset.Children.Add(Text("チェックを外すと同名設定をプリセットの内容に戻します。プリセットにない設定・プラグインデータはどちらでも残ります。", 12));
         var presetRow = new WrapPanel(); presetRow.Children.Add(AsyncBtn("現在の構成を保存", async ct =>
@@ -355,26 +406,30 @@ public sealed class MainWindow : Window
             p.LoaderVersion = dependencies["fabric-loader"]?.ToString() ?? ""; store.Save();
             MessageBox.Show(this, "取り込み完了。必要ローダーのバージョン:\n" + deps + "\n起動設定からローダー本体を導入してください。Fabricはパック指定版を保存しました。", "MODパック"); Refresh();
         }));
+        OrganizeCards("MOD / プラグイン");
     }
     private void PropertiesPage()
     {
         var p = Selected!; var path = SafeFiles.Inside(store.ServerDir(p), "server.properties");
         string? original = File.Exists(path) ? File.ReadAllText(path) : null;
         var values = new ServerProperties(original ?? $"motd=A Minecraft Server\nmax-players=20\ndifficulty=easy\ngamemode=survival\nforce-gamemode=false\nonline-mode=true\nwhite-list=false\nview-distance=10\nsimulation-distance=10\nserver-port={p.Port}\n").Values;
-        var intro = Card(page, "サーバー設定 • server.properties");
+        var intro = Card(page, "ゲーム・接続の設定");
         intro.Children.Add(Text("停止中に保存できます。変更した項目だけを反映し、変更前のファイルは履歴へ残します。適用には通常、サーバーの再起動が必要です。"));
         intro.Children.Add(Text("このバージョンのファイルにある項目を表示します。ワールド生成設定は既存ワールドを作り直しません。Paperの既存ワールドの難易度はコンソールで変更してください。", 12));
         intro.Children.Add(Text($"現在の起動ポートは {p.Port}。接続ポートをこの画面で変更すると起動設定にも反映します。", 12));
         var search = Field(intro, "項目を検索", ""); search.Name = "PropertySearch";
         var readers = new Dictionary<string, Func<string>>(); var initial = new Dictionary<string, string>(values);
         var rows = new List<(FrameworkElement Row, string Search)>();
+        var groupCards = new Dictionary<string, FrameworkElement>();
+        string selectedGroup = "基本"; var groups = new WrapPanel { Name = "PropertyCategories" }; intro.Children.Add(groups);
         foreach (var group in values.Select(kv => (Field: PropertyFields.For(kv.Key, kv.Value), kv.Value)).GroupBy(x => x.Field.Group))
         {
-            var card = Card(page, group.Key);
+            var card = Card(page, group.Key); groupCards[group.Key] = (FrameworkElement)card.Parent;
             foreach (var (field, value) in group)
             {
                 var row = new StackPanel { Margin = new Thickness(0, 0, 0, 12) }; card.Children.Add(row);
-                row.Children.Add(Text(field.Label, 14)); row.Children.Add(Text(field.Key, 11));
+                row.Children.Add(Text(field.Label, 14)); row.ToolTip = "設定ファイル内のキー: " + field.Key;
+                if (field.Group == "追加・独自設定") row.Children.Add(Text(field.Key, 11));
                 if (field.Kind == "bool" && value is "true" or "false")
                 {
                     var control = new CheckBox { Content = "有効", IsChecked = value == "true", Tag = field.Key }; row.Children.Add(control);
@@ -383,7 +438,7 @@ public sealed class MainWindow : Window
                 else if (field.Options != null)
                 {
                     var labels = new Dictionary<string, string> { ["peaceful"] = "ピースフル", ["easy"] = "イージー", ["normal"] = "ノーマル", ["hard"] = "ハード", ["survival"] = "サバイバル", ["creative"] = "クリエイティブ", ["adventure"] = "アドベンチャー", ["spectator"] = "スペクテイター" };
-                    var choices = field.Options.Concat([value]).Distinct().Select(x => new KeyValuePair<string, string>(x, labels.GetValueOrDefault(x, x))).ToArray();
+                    var choices = field.Options.Concat([value]).Distinct().Select(x => new KeyValuePair<string, string>(x, labels.GetValueOrDefault(x, JapaneseDisplay.Label(x)))).ToArray();
                     var control = new ComboBox { ItemsSource = choices, DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = value, Tag = field.Key }; row.Children.Add(control);
                     readers[field.Key] = () => control.SelectedValue?.ToString() ?? value;
                 }
@@ -399,7 +454,17 @@ public sealed class MainWindow : Window
                 rows.Add((row, field.Key + " " + field.Label + " " + field.Group));
             }
         }
-        search.TextChanged += (_, _) => { foreach (var row in rows) row.Row.Visibility = row.Search.Contains(search.Text, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed; };
+        void Filter()
+        {
+            foreach (var row in rows) row.Row.Visibility = row.Search.Contains(search.Text, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var (name, card) in groupCards) card.Visibility = search.Text.Length > 0
+                ? (((StackPanel)((Border)card).Child).Children.OfType<StackPanel>().Any(r => r.Visibility == Visibility.Visible) ? Visibility.Visible : Visibility.Collapsed)
+                : name == selectedGroup ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var button in groups.Children.OfType<Button>()) button.FontWeight = button.Tag?.ToString() == selectedGroup ? FontWeights.Bold : FontWeights.Normal;
+        }
+        if (!groupCards.ContainsKey(selectedGroup)) selectedGroup = groupCards.Keys.FirstOrDefault() ?? "基本";
+        foreach (var name in groupCards.Keys) { var button = Btn(name, () => { selectedGroup = name; search.Clear(); Filter(); }); button.Tag = name; groups.Children.Add(button); }
+        search.TextChanged += (_, _) => Filter(); Filter();
         bool Dirty() => readers.Any(kv => kv.Value() != initial[kv.Key]);
         mayLeave = () => !Dirty() || Confirm("サーバー設定の未保存の編集を破棄しますか？");
         intro.Children.Add(Btn("サーバー設定を保存", () =>
@@ -411,13 +476,80 @@ public sealed class MainWindow : Window
         }, true));
         intro.Children.Add(Btn("テキスト編集へ", () => Navigate("files")));
     }
+    private void ModSettingsPage()
+    {
+        var p = Selected!; var root = store.ServerDir(p);
+        var intro = Card(page, "MODの設定を項目ごとに編集");
+        intro.Children.Add(Text("JSON・単純なTOMLの項目を表示します。登録済みの項目は日本語名で表示し、未登録は原文を併記します。設定ファイルのキーは変更しません。", 12));
+        intro.Children.Add(Text("停止中に保存できます。MODのバージョンによって意味や許容値が異なるため、作者の説明も確認してください。配列の各項目は1行ずつ入力します。", 12));
+        var paths = ModConfigurations.EditableFiles(root).Where(f => Path.GetExtension(f).ToLowerInvariant() is ".json" or ".toml").ToArray();
+        var list = new ComboBox { Name = "ModSettingsFiles", ItemsSource = paths }; JapaneseDisplay.Apply(list); intro.Children.Add(list);
+        var form = new StackPanel(); page.Children.Add(form);
+        var readers = new Dictionary<string, Func<string>>(); var initial = new Dictionary<string, string>();
+        string current = "", original = ""; bool loading = false;
+        bool Dirty() => readers.Any(x => x.Value() != initial[x.Key]);
+        void Load(string relative)
+        {
+            original = File.ReadAllText(SafeFiles.Inside(root, relative)); current = relative;
+            readers.Clear(); initial.Clear(); form.Children.Clear();
+            var document = new ModSettingDocument(original, Path.GetExtension(relative));
+            var categories = new WrapPanel { Name = "ModSettingCategories" }; form.Children.Add(categories);
+            var cards = new List<FrameworkElement>();
+            foreach (var group in document.Fields.GroupBy(f => f.Group))
+            {
+                var groupName = group.Key.Length == 0 ? "基本" : string.Join(" › ", group.Key.Split(" / ").Select(x => ModSettingDocument.Known(x) ? ModSettingDocument.Label(x) : x));
+                var card = Card(form, groupName); var border = (FrameworkElement)card.Parent; cards.Add(border);
+                categories.Children.Add(Btn(groupName, () => { foreach (var item in cards) item.Visibility = item == border ? Visibility.Visible : Visibility.Collapsed; }));
+                border.Visibility = cards.Count == 1 ? Visibility.Visible : Visibility.Collapsed;
+                foreach (var field in group)
+                {
+                    var label = ModSettingDocument.Label(field.Key);
+                    var row = new StackPanel { Margin = new Thickness(0, 4, 0, 8), ToolTip = "設定ファイル内のキー: " + field.Key }; card.Children.Add(row);
+                    row.Children.Add(Text(label, 14));
+                    if (!ModSettingDocument.Known(field.Key)) row.Children.Add(Text(field.Key, 11));
+                    if (field.Kind == "bool")
+                    {
+                        var control = new CheckBox { Content = "有効", IsChecked = field.Value == "true", Tag = field.Key }; row.Children.Add(control); readers[field.Id] = () => control.IsChecked == true ? "true" : "false";
+                    }
+                    else if (field.Kind == "text" && new[] { "password", "secret", "token" }.Any(k => field.Key.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var control = new PasswordBox { Password = field.Value, Tag = field.Key, Padding = new Thickness(8) }; control.SetResourceReference(Control.BackgroundProperty, "Input"); control.SetResourceReference(Control.ForegroundProperty, "Ink"); row.Children.Add(control); readers[field.Id] = () => control.Password;
+                    }
+                    else
+                    {
+                        var control = Field(row, field.Kind == "lines" ? "1行に1項目（空欄で指定なし）" : field.Kind == "number" ? "数値" : "設定値", field.Value, field.Kind == "lines");
+                        control.Tag = field.Key; readers[field.Id] = () => control.Text;
+                    }
+                    initial[field.Id] = field.Value;
+                }
+            }
+            form.Children.Add(Text("表示されない複雑な値や未対応の形式は「詳細なテキスト編集」で確認できます。未変更の内容は保存時もそのまま保持します。", 12));
+        }
+        list.SelectionChanged += (_, _) =>
+        {
+            if (loading || list.SelectedItem is not string relative) return;
+            if (Dirty() && !Confirm("MOD設定の未保存の編集を破棄しますか？")) { loading = true; list.SelectedItem = current; loading = false; return; }
+            try { Load(relative); } catch (Exception ex) { readers.Clear(); initial.Clear(); form.Children.Clear(); form.Children.Add(Text("設定を表示できません: " + ex.Message)); }
+        };
+        mayLeave = () => !Dirty() || Confirm("MOD設定の未保存の編集を破棄しますか？");
+        intro.Children.Add(Btn("MOD設定を保存", () =>
+        {
+            if (current.Length == 0) throw new IOException("設定ファイルを選択してください。");
+            var changes = readers.Where(x => x.Value() != initial[x.Key]).ToDictionary(x => x.Key, x => x.Value());
+            new ServerFiles(store, p, Runtime(p)).SaveModSettings(current, original, changes);
+            Load(current); status.Text = "MOD設定を保存しました。通常は次回サーバー起動から反映されます。";
+        }, true));
+        intro.Children.Add(Btn("詳細なテキスト編集へ", () => Navigate("files")));
+        list.SelectedItem = paths.FirstOrDefault(f => f.EndsWith("automodpack-server.json")) ?? paths.FirstOrDefault();
+        if (paths.Length == 0) form.Children.Add(Text("対応形式の設定がありません。MODが初回起動で設定を生成した後に開き直してください。"));
+    }
     private void FilesPage()
     {
-        var p = Selected!; var root = store.ServerDir(p); page.Children.Add(Btn("server.propertiesをGUIで設定", () => Navigate("properties"))); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
+        var p = Selected!; var root = store.ServerDir(p); page.Children.Add(Btn("ゲーム・接続の設定を開く", () => Navigate("properties"))); var card = Card(page, "設定ファイルを編集"); card.Children.Add(Text("停止中に保存できます。保存前のファイルは履歴に退避します。server-portは起動設定のポートが優先されます。"));
         if (p.Engine == "paper") card.Children.Add(Text("Paperの既存ワールドの難易度は、コンソールで difficulty hard などを送信して変更してください。設定ファイルだけでは既存ワールドへ反映されない場合があります。", 12));
         card.Children.Add(Text("FTBのSNBT、JSON5/JSONC、CFG、KubeJSのJS、CraftTweakerのZSにも対応。JSON以外の構文・値は各MOD側で検証されます。最大500件・1ファイル1MB未満。", 12));
         var paths = ModConfigurations.EditableFiles(root).ToList(); if (!paths.Contains("server.properties")) paths.Insert(0, "server.properties");
-        var list = new ComboBox { ItemsSource = paths, SelectedIndex = 0 }; card.Children.Add(list);
+        var list = new ComboBox { ItemsSource = paths, SelectedIndex = 0 }; JapaneseDisplay.Apply(list); card.Children.Add(list);
         var editor = new TextBox { AcceptsReturn = true, AcceptsTab = true, Height = 340, FontFamily = new FontFamily("Consolas"), FontSize = 13, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
         string current = ""; bool dirty = false; bool loading = false;
         void Load() { loading = true; current = list.SelectedItem?.ToString() ?? "server.properties"; var path = SafeFiles.Inside(root, current); editor.Text = File.Exists(path) ? File.ReadAllText(path) : "online-mode=true\nserver-port=" + p.Port; dirty = false; loading = false; }
@@ -443,8 +575,8 @@ public sealed class MainWindow : Window
     private void SystemPage()
     {
         var card = Card(page, "このPCの状態"); var info = new TextBox { Text = Diagnostics.Describe(), IsReadOnly = true, AcceptsReturn = true, Height = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; card.Children.Add(info); card.Children.Add(Btn("更新", () => info.Text = Diagnostics.Describe()));
-        var network = Card(page, "TCP疎通チェック"); var host = Field(network, "ホスト名 / IP", "127.0.0.1"); var port = Field(network, "ポート", (Selected?.Port ?? 25565).ToString()); var result = Text(""); network.Children.Add(AsyncBtn("接続をテスト", async _ => { var number = int.Parse(port.Text); if (number is < 1 or > 65535) throw new IOException("ポートが不正です。"); result.Text = await Diagnostics.Probe(host.Text.Trim(), number); })); network.Children.Add(result);
-        network.Children.Add(Btn("Windows Firewall設定を開く", () => Open("windowsdefender://network/")));
+        var network = Card(page, "サーバーへの接続診断"); var host = Field(network, "ホスト名 / IP", "127.0.0.1"); var port = Field(network, "ポート", (Selected?.Port ?? 25565).ToString()); var result = Text(""); network.Children.Add(AsyncBtn("接続をテスト", async _ => { var number = int.Parse(port.Text); if (number is < 1 or > 65535) throw new IOException("ポートが不正です。"); result.Text = await Diagnostics.Probe(host.Text.Trim(), number); })); network.Children.Add(result);
+        network.Children.Add(Btn("Windowsのファイアウォール設定", () => Open("windowsdefender://network/"))); OrganizeCards();
     }
     private void AppearancePage()
     {

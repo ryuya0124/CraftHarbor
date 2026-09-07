@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.8')
+param([string]$Version = '0.1.9')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $setup = Join-Path $projectRoot "artifacts\packages\CraftHarbor-$Version-win-x64-setup.exe"

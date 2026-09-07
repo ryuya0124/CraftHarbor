@@ -23,7 +23,7 @@ internal static class Program
             var content = (FrameworkElement)window.Content;
             void Layout() { content.Measure(new Size(1240, 840)); content.Arrange(new Rect(0, 0, 1240, 840)); content.UpdateLayout(); }
             for (int pass = 0; pass < 2; pass++)
-                foreach (var key in new[] { "overview", "console", "launch", "mods", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
+                foreach (var key in new[] { "overview", "console", "launch", "mods", "modsettings", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
                 {
                     navigate.Invoke(window, [key]); Layout();
                     Console.WriteLine($"PASS UI navigation/layout {key} round {pass + 1}");
@@ -55,7 +55,7 @@ internal static class Program
                 Theme.Apply(appearance, true);
                 Theme.Load(root);
                 if (Theme.Appearance != appearance) throw new Exception("Theme preference did not persist");
-                foreach (var key in new[] { "overview", "console", "launch", "mods", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
+                foreach (var key in new[] { "overview", "console", "launch", "mods", "modsettings", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
                 {
                     navigate.Invoke(window, [key]); Layout();
                     var expected = ((SolidColorBrush)app.Resources["Input"]).Color;
@@ -97,9 +97,29 @@ internal static class Program
             navigate.Invoke(window, ["mods"]); Layout();
             if (Descendants(content).OfType<CheckBox>().Single(b => b.Content?.ToString()?.StartsWith("現在の設定を維持") == true).IsChecked != true) throw new Exception("Preserve settings must be default");
             Console.WriteLine("PASS extended MOD config UI edits and preservation default");
+            File.WriteAllText(Path.Combine(autoDir, "automodpack-server.json"), "{\"DO_NOT_CHANGE_IT\":7,\"modpackName\":\"元の名前\",\"generateModpackOnStart\":false,\"syncedFiles\":[\"mods/**\"],\"extra\":{\"unknown\":12}}" );
+            navigate.Invoke(window, ["modsettings"]); Layout();
+            if (!Descendants(content).OfType<TextBlock>().Any(t => t.Text == "配布するMOD構成の名前")) throw new Exception("Japanese MOD setting label missing");
+            Descendants(content).OfType<TextBox>().Single(t => t.Tag?.ToString() == "modpackName").Text = "日本語の同期構成";
+            Descendants(content).OfType<TextBox>().Single(t => t.Tag?.ToString() == "syncedFiles").Text = "mods/**\nconfig/**";
+            Descendants(content).OfType<CheckBox>().Single(t => t.Tag?.ToString() == "generateModpackOnStart").IsChecked = true;
+            Descendants(content).OfType<Button>().Single(b => b.Content?.ToString() == "MOD設定を保存").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            navigate.Invoke(window, ["overview"]); navigate.Invoke(window, ["modsettings"]); Layout();
+            var autoSaved = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(autoDir, "automodpack-server.json")))!;
+            if (autoSaved["modpackName"]!.ToString() != "日本語の同期構成" || !autoSaved["generateModpackOnStart"]!.GetValue<bool>() || autoSaved["syncedFiles"]!.AsArray().Count != 2 || autoSaved["extra"]!["unknown"]!.GetValue<int>() != 12 || autoSaved["DO_NOT_CHANGE_IT"]!.GetValue<int>() != 7) throw new Exception("MOD settings GUI changed unrelated values or failed save");
+            if (Descendants(content).OfType<TextBox>().Single(t => t.Tag?.ToString() == "modpackName").Text != "日本語の同期構成") throw new Exception("MOD settings reopen failed");
+            if (args.Length > 0) SaveImage(content, Path.Combine(Path.GetDirectoryName(args[0])!, "japanese-mod-settings.png"));
+            var groups = Descendants(content).OfType<WrapPanel>().Single(x => x.Name == "NavigationGroups");
+            if (groups.Children.Count != 4) throw new Exception("Top navigation must have four categories");
+            groups.Children.OfType<Button>().Single(b => b.Content?.ToString() == "サーバー設定").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
+            var section = Descendants(content).OfType<WrapPanel>().Single(x => x.Name == "SectionCategories");
+            section.Children.OfType<Button>().Single(b => b.Content?.ToString() == "Java・メモリ・接続").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
+            var javaInput = Descendants(content).OfType<TextBox>().Single(t => System.Windows.Automation.AutomationProperties.GetName(t) == "Java実行ファイルの場所");
+            if (!javaInput.IsEnabled || section.Children.OfType<Button>().Count(b => ((FrameworkElement)b.Tag).Visibility == Visibility.Visible) != 1) throw new Exception("Launch category filtering failed");
+            Console.WriteLine("PASS Japanese MOD form save/reopen, nested unknown values, arrays and hierarchical navigation");
             navigate.Invoke(window, ["console"]); Layout();
             foreach (var command in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" })
-                if (!Descendants(content).OfType<Button>().Any(b => b.Content?.ToString() == command)) throw new Exception("Missing AutoModpack command");
+                if (!Descendants(content).OfType<Button>().Any(b => b.Tag?.ToString() == command)) throw new Exception("Missing AutoModpack command");
             Console.WriteLine("PASS AutoModpack config discovery/save/history and console commands");
             var propertiesPath = Path.Combine(serverDir, "server.properties");
             File.WriteAllText(propertiesPath, "# retain\nmotd=before\nmax-players=20\ndifficulty=easy\ngamemode=survival\nwhite-list=false\nserver-port=25565\nrcon.password=hidden\ncustom.setting=keep\n");
