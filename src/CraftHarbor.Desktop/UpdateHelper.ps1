@@ -7,7 +7,13 @@ try {
     if ($parent -and $parent.StartTime.ToUniversalTime().Ticks -eq $request.ParentStartedTicks) {
         if (-not $parent.WaitForExit(120000)) { throw 'Application is still running; update was not applied.' }
     }
-    if ((Get-Item -LiteralPath $request.Installer).Length -ne $request.Size -or (Get-FileHash -LiteralPath $request.Installer -Algorithm SHA256).Hash -ne $request.SHA256) { throw 'Installer verification failed.' }
+    # Use .NET directly: inherited PSModulePath can hide Windows PowerShell's Get-FileHash.
+    $inputFile = [IO.File]::OpenRead($request.Installer)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        $actualHash = [BitConverter]::ToString($algorithm.ComputeHash($inputFile)).Replace('-', '')
+        if ($inputFile.Length -ne $request.Size -or $actualHash -ne $request.SHA256) { throw 'Installer verification failed.' }
+    } finally { $inputFile.Dispose(); $algorithm.Dispose() }
     $target = [IO.Path]::GetFullPath($request.TargetDirectory)
     if (-not (Test-Path -LiteralPath (Join-Path $target 'unins000.exe'))) { throw 'Existing installation was not found.' }
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', ('/DIR="{0}"' -f $target), ('/LOG="{0}"' -f ($Manifest + '.install.log')))
