@@ -15,7 +15,8 @@ internal static class Program
         var root = Path.Combine(Path.GetTempPath(), "CraftHarbor.UiTests-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var app = new App(); app.InitializeComponent();
+            var app = new Application(); app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/CraftHarbor;component/Styles.xaml") }); app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
             var store = new HarborStore(root); var p = store.Add("Harbor Survival"); p.Engine = "fabric"; store.Save();
             var window = new MainWindow(root);
             var navigate = typeof(MainWindow).GetMethod("Navigate", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -108,7 +109,33 @@ internal static class Program
             {
                 SaveImage(content, args[0]);
             }
-            window.Close(); Console.WriteLine("RESULT UI smoke passed; no Minecraft processes launched"); return 0;
+            window.Close();
+            void PumpUntil(Func<bool> complete)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame(); var deadline = DateTime.UtcNow.AddSeconds(5);
+                var poll = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+                poll.Tick += (_, _) => { if (complete() || DateTime.UtcNow >= deadline) frame.Continue = false; };
+                poll.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame); poll.Stop();
+                if (!complete()) throw new Exception("Startup test timed out");
+            }
+            var gate = new TaskCompletionSource<HarborStore>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var loading = new StartupWindow { ShowActivated = false }; bool rendered = false; Task? loadTask = null;
+            loading.ContentRendered += (_, _) => { if (rendered) return; rendered = true; loadTask = loading.LoadAsync(() => gate.Task); };
+            loading.Show(); PumpUntil(() => rendered && loadTask != null);
+            if (!loading.IsVisible || loadTask!.IsCompleted) throw new Exception("Loading window must render before storage completes");
+            bool responsive = false; loading.Dispatcher.BeginInvoke(() => responsive = true); PumpUntil(() => responsive);
+            gate.SetResult(store); PumpUntil(() => loadTask.IsCompleted);
+            if (loading.IsVisible || app.MainWindow is not MainWindow ready || !ready.IsVisible) throw new Exception("Loading handoff failed");
+            app.MainWindow.Close();
+            var cancelGate = new TaskCompletionSource<HarborStore>(); var cancelled = new StartupWindow { ShowActivated = false };
+            cancelled.Show(); var cancelledTask = cancelled.LoadAsync(() => cancelGate.Task); cancelled.Close(); cancelGate.SetResult(store); PumpUntil(() => cancelledTask.IsCompleted);
+            if (app.Windows.OfType<MainWindow>().Any(w => w.IsVisible)) throw new Exception("Closing loader reopened main window");
+            var failure = new StartupWindow { ShowActivated = false }; failure.Show();
+            var failedTask = failure.LoadAsync(() => Task.FromException<HarborStore>(new IOException("読み込みテスト"))); PumpUntil(() => failedTask.IsCompleted);
+            if (!failure.IsVisible || !failure.Title.Contains("起動できませんでした")) throw new Exception("Startup failure feedback missing");
+            failure.Close();
+            Console.WriteLine("PASS startup render-before-load, responsive dispatcher, handoff, close cancellation and failure feedback");
+            Console.WriteLine("RESULT UI smoke passed; no Minecraft processes launched"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }

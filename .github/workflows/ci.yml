@@ -31,6 +31,9 @@ jobs:
       - name: Install, upgrade and uninstall without removing server data
         shell: pwsh
         run: ./scripts/test-installer.ps1
+      - name: Launch packaged application with isolated data
+        shell: pwsh
+        run: ./scripts/measure-startup.ps1 -Executable artifacts/installed/CraftHarbor.exe -Runs 1
       - uses: actions/upload-artifact@v4
         with:
           name: CraftHarbor-win-x64

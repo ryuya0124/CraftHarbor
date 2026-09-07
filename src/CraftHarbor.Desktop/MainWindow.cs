@@ -37,9 +37,10 @@ public sealed class MainWindow : Window
         if (!runtimes.TryGetValue(p.Id, out var runtime)) runtimes[p.Id] = runtime = new ServerRuntime(); return runtime;
     }
     private static SolidColorBrush Brush(string color) => Theme.Brush(color);
-    public MainWindow(string root)
+    public MainWindow(string root) : this(new HarborStore(root)) { }
+    public MainWindow(HarborStore loadedStore)
     {
-        store = new HarborStore(root); Theme.Load(root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
+        store = loadedStore; Theme.Load(store.Root); Style = (Style)FindResource(typeof(Window)); Theme.Attach(this);
         Title = "CraftHarbor — Minecraft Server Control"; Width = 1240; Height = 840; MinWidth = 980; MinHeight = 700; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var layout = new Grid { Background = Brush("#0D141F") }; layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
         var sidebar = new DockPanel { Background = Brush("#111B29"), Margin = new Thickness(0) }; layout.Children.Add(sidebar);
@@ -53,7 +54,7 @@ public sealed class MainWindow : Window
         var footer = new StackPanel { Margin = new Thickness(20) };
         footer.Children.Add(Btn("Java ランタイム", () => Navigate("java"))); footer.Children.Add(Btn("ネットワーク・システム", () => Navigate("system"))); footer.Children.Add(Btn("ガイド / 保存場所", () => Navigate("help")));
         footer.Children.Add(Btn("表示設定", () => Navigate("appearance")));
-        footer.Children.Add(new TextBlock { Text = "v0.1.6  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
+        footer.Children.Add(new TextBlock { Text = "v0.1.7  •  Windows native", FontSize = 11, Foreground = Brush("#91A3B8") });
         DockPanel.SetDock(footer, Dock.Bottom); sidebar.Children.Add(footer); servers.Margin = new Thickness(12, 0, 12, 8); sidebar.Children.Add(servers);
         servers.SelectionChanged += (_, e) =>
         {

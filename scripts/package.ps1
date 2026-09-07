@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.6', [switch]$WithInstaller)
+param([string]$Version = '0.1.7', [switch]$WithInstaller)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Push-Location $projectRoot
@@ -20,6 +20,11 @@ try {
         Compress-Archive -Path (Join-Path $target '*') -DestinationPath $zipPath -Force
     }
     if ($WithInstaller) {
+        $installedTarget = Join-Path $artifactRoot 'installed'
+        dotnet publish src/CraftHarbor.Desktop -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishReadyToRun=true -o $installedTarget
+        if ($LASTEXITCODE -ne 0) { throw 'Installed application publish failed' }
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md'), (Join-Path $projectRoot 'LICENSE') -Destination $installedTarget -Force
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $installedTarget -Recurse -Force
         $compiler = & (Join-Path $PSScriptRoot 'setup-installer-compiler.ps1')
         & $compiler "/DAppVersion=$Version" (Join-Path $projectRoot 'installer\CraftHarbor.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }

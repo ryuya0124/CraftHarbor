@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.6')
+param([string]$Version = '0.1.7')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $setup = Join-Path $projectRoot "artifacts\packages\CraftHarbor-$Version-win-x64-setup.exe"
@@ -35,6 +35,7 @@ Write-Output 'PASS running-app install refusal (no process terminated)'
 for ($pass = 0; $pass -lt 2; $pass++) {
     if ((InvokeInstaller $setup ($installOptions + ('/LOG="{0}"' -f (Join-Path $testDirectory "install-$pass.log")))) -ne 0) { throw 'Install/upgrade failed' }
     $installed = Get-ItemProperty -LiteralPath $key
+    if (-not (Test-Path -LiteralPath (Join-Path $testDirectory 'coreclr.dll'))) { throw 'Installer must deploy runtime without launch-time extraction' }
     if ($installed.DisplayVersion -ne $Version) { throw 'Uninstall registration version mismatch' }
     $shell = New-Object -ComObject WScript.Shell
     if ($shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $testDirectory 'CraftHarbor.exe')) { throw 'Start menu target mismatch' }
