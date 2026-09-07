@@ -23,7 +23,7 @@ internal static class Program
             var content = (FrameworkElement)window.Content;
             void Layout() { content.Measure(new Size(1240, 840)); content.Arrange(new Rect(0, 0, 1240, 840)); content.UpdateLayout(); }
             for (int pass = 0; pass < 2; pass++)
-                foreach (var key in new[] { "overview", "console", "launch", "mods", "files", "backups", "java", "system", "help", "appearance" })
+                foreach (var key in new[] { "overview", "console", "launch", "mods", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
                 {
                     navigate.Invoke(window, [key]); Layout();
                     Console.WriteLine($"PASS UI navigation/layout {key} round {pass + 1}");
@@ -55,7 +55,7 @@ internal static class Program
                 Theme.Apply(appearance, true);
                 Theme.Load(root);
                 if (Theme.Appearance != appearance) throw new Exception("Theme preference did not persist");
-                foreach (var key in new[] { "overview", "console", "launch", "mods", "files", "backups", "java", "system", "help", "appearance" })
+                foreach (var key in new[] { "overview", "console", "launch", "mods", "properties", "files", "backups", "java", "system", "help", "updates", "appearance" })
                 {
                     navigate.Invoke(window, [key]); Layout();
                     var expected = ((SolidColorBrush)app.Resources["Input"]).Color;
@@ -101,6 +101,21 @@ internal static class Program
             foreach (var command in new[] { "automodpack", "automodpack host", "automodpack generate", "automodpack config reload" })
                 if (!Descendants(content).OfType<Button>().Any(b => b.Content?.ToString() == command)) throw new Exception("Missing AutoModpack command");
             Console.WriteLine("PASS AutoModpack config discovery/save/history and console commands");
+            var propertiesPath = Path.Combine(serverDir, "server.properties");
+            File.WriteAllText(propertiesPath, "# retain\nmotd=before\nmax-players=20\ndifficulty=easy\ngamemode=survival\nwhite-list=false\nserver-port=25565\nrcon.password=hidden\ncustom.setting=keep\n");
+            navigate.Invoke(window, ["properties"]); Layout();
+            Descendants(content).OfType<TextBox>().Single(x => x.Tag?.ToString() == "motd").Text = "日本語サーバー";
+            Descendants(content).OfType<TextBox>().Single(x => x.Tag?.ToString() == "max-players").Text = "8";
+            Descendants(content).OfType<TextBox>().Single(x => x.Tag?.ToString() == "server-port").Text = "25572";
+            Descendants(content).OfType<CheckBox>().Single(x => x.Tag?.ToString() == "white-list").IsChecked = true;
+            Descendants(content).OfType<ComboBox>().Single(x => x.Tag?.ToString() == "difficulty").SelectedValue = "hard";
+            if (Descendants(content).OfType<PasswordBox>().Single().Password != "hidden") throw new Exception("Secret editor missing");
+            Descendants(content).OfType<Button>().Single(b => b.Content?.ToString() == "サーバー設定を保存").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            navigate.Invoke(window, ["overview"]); navigate.Invoke(window, ["properties"]); Layout();
+            var savedProperties = new ServerProperties(File.ReadAllText(propertiesPath));
+            if (savedProperties.Values["motd"] != "日本語サーバー" || savedProperties.Values["difficulty"] != "hard" || savedProperties.Values["white-list"] != "true" || savedProperties.Values["custom.setting"] != "keep" || !File.ReadAllText(propertiesPath).StartsWith("# retain") || new HarborStore(root).Profiles.Single().Port != 25572) throw new Exception("GUI properties roundtrip failed");
+            if (Descendants(content).OfType<TextBox>().Single(x => x.Tag?.ToString() == "motd").Text != "日本語サーバー") throw new Exception("GUI properties reopen failed");
+            Console.WriteLine("PASS server.properties GUI edit/save/reopen, port sync, secret field and comment preservation");
             navigate.Invoke(window, ["overview"]); Layout();
             typeof(MainWindow).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
             Layout();

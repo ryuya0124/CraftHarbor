@@ -177,6 +177,55 @@ await Test("Legacy preset merges settings and cannot overwrite world data", () =
     using (var zip = ZipFile.Open(Path.Combine(store.PresetDir(p), "bad.zip"), ZipArchiveMode.Create)) { using var w = new StreamWriter(zip.CreateEntry("world/level.dat").Open()); w.Write("bad"); }
     Throws<IOException>(() => files.ApplyPreset("bad.zip", false)); Check(File.ReadAllText(Path.Combine(store.ServerDir(p), "config/keep.txt")) == "current");
 }));
+await Test("Properties escape/continuation parsing and changed-key-only patching", () => Sync(() =>
+{
+    var original = "# keep\r\n! comment\\\r\nmotd : \\u65e5\\u672c\\\r\n  \\u8a9e\r\ncustom\\:key = a\\=b\r\nmax-players=10\r\nmax-players:20\r\nunknown=unchanged";
+    var document = new ServerProperties(original); Check(document.Values["motd"] == "日本語"); Check(document.Values["custom:key"] == "a=b"); Check(document.Values["max-players"] == "20");
+    Check(document.Apply(new Dictionary<string,string>()) == original);
+    var updated = document.Apply(new Dictionary<string,string> { ["motd"] = " 日本語\\path\nsecond", ["max-players"] = "3" });
+    var read = new ServerProperties(updated); Check(read.Values["motd"] == " 日本語\\path\nsecond"); Check(read.Values["max-players"] == "3");
+    Check(updated.Contains("# keep\r\n! comment\\\r\n")); Check(updated.Contains("custom\\:key = a\\=b\r\n")); Check(updated.EndsWith("unknown=unchanged"));
+    Check(updated.Split("max-players").Length == 2); Throws<IOException>(() => new ServerProperties("motd=\\uBAD!"));
+}));
+await Test("GUI properties validation, port persistence, history and stale-file rejection", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("properties-gui")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store,p,runtime);
+    var original = "# note\nmotd=before\nserver-port=25565\nunknown=keep\n"; files.SaveConfiguration("server.properties", original);
+    Throws<IOException>(() => files.SaveServerProperties(original, new Dictionary<string,string> { ["server-port"]="70000" }));
+    Check(File.ReadAllText(Path.Combine(store.ServerDir(p),"server.properties")) == original);
+    var updated = files.SaveServerProperties(original, new Dictionary<string,string> { ["motd"]="日本語", ["server-port"]="25570", ["white-list"]="true" });
+    Check(new HarborStore(store.Root).Profiles.Single().Port == 25570 && p.Port == 25570); Check(updated.Contains("unknown=keep"));
+    Check(File.ReadAllText(SafeFiles.Files(Path.Combine(store.Root,"file-history")).Single()) == original);
+    Throws<IOException>(() => files.SaveServerProperties(original, new Dictionary<string,string> { ["motd"]="stale" }));
+    Throws<IOException>(() => files.SaveServerProperties(updated, new Dictionary<string,string> { ["level-name"]="../outside" }));
+    Check(File.ReadAllText(Path.Combine(store.ServerDir(p),"server.properties")) == updated);
+}));
+await Test("Properties profile-save failure restores file and in-memory port", () => Sync(() =>
+{
+    var store = new HarborStore(Temp("properties-rollback")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store,p,runtime);
+    var original = "server-port=25565\n"; files.SaveConfiguration("server.properties",original);
+    using var locked = new FileStream(Path.Combine(store.Root,"profiles.json"),FileMode.Open,FileAccess.Read,FileShare.Read);
+    try { files.SaveServerProperties(original,new Dictionary<string,string> { ["server-port"]="25571" }); throw new Exception("Locked profile was overwritten"); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    Check(p.Port == 25565); Check(File.ReadAllText(Path.Combine(store.ServerDir(p),"server.properties")) == original);
+}));
+await Test("Release updater selects newer complete previews and rejects drafts/older versions", () => Sync(() =>
+{
+    string Release(string version, bool draft = false, bool checksum = true) => System.Text.Json.JsonSerializer.Serialize(new { tag_name="v"+version, draft, prerelease=true, assets=new object[] { new { name=$"CraftHarbor-{version}-win-x64-setup.exe", id=1, size=2048 }, new { name=checksum ? "SHA256SUMS.txt" : "other", id=2, size=200 } } });
+    var json = "[" + string.Join(",", Release("0.1.8"), Release("0.2.0"), Release("9.0.0",true), Release("8.0.0",checksum:false)) + "]";
+    Check(ReleaseUpdates.Select(json,new Version(0,1,7,0))?.Version == "0.2.0");
+    Check(ReleaseUpdates.Select(json,new Version(0,2,0,0)) == null);
+}));
+await Test("Updater checksum requires exact asset and verifies downloaded size/content", () => Sync(() =>
+{
+    var path=Temp("update.exe"); File.WriteAllText(path,"test update bytes");
+    var hash=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+    Check(ReleaseUpdates.ExpectedHash(hash+"  update.exe\n", "update.exe") == hash);
+    Check(ReleaseUpdates.Verify(path,hash,new FileInfo(path).Length) == hash);
+    Throws<IOException>(() => ReleaseUpdates.ExpectedHash(hash+"  wrong.exe", "update.exe"));
+    Throws<IOException>(() => ReleaseUpdates.ExpectedHash(hash+"  update.exe\n"+hash+"  update.exe", "update.exe"));
+    Throws<IOException>(() => ReleaseUpdates.Verify(path,new string('0',64),new FileInfo(path).Length));
+    Throws<IOException>(() => ReleaseUpdates.Verify(path,hash,1));
+}));
 await Test("Configuration invalid JSON and traversal preserve original/history", () => Sync(() =>
 {
     var store = new HarborStore(Temp("config-failure")); var p = store.Add("test"); using var runtime = new ServerRuntime(); var files = new ServerFiles(store, p, runtime);

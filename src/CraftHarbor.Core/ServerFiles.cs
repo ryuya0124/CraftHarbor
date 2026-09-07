@@ -39,6 +39,35 @@ public sealed class ServerFiles(HarborStore store, ServerProfile profile, Server
         }
         SafeFiles.AtomicWrite(path, content);
     }
+    public string SaveServerProperties(string? expectedText, IReadOnlyDictionary<string, string> changes)
+    {
+        Stopped();
+        var path = SafeFiles.Inside(Root, "server.properties");
+        var current = File.Exists(path) ? File.ReadAllText(path) : null;
+        if (current != expectedText) throw new IOException("設定ファイルが別の操作で変更されました。画面を開き直してください。");
+        foreach (var (key, value) in changes)
+        {
+            if (string.IsNullOrWhiteSpace(key)) throw new IOException("設定名が空です。");
+            PropertyFields.For(key, value).Validate(value);
+            if (key == "level-name") _ = SafeFiles.Inside(Root, value);
+        }
+        var updated = new ServerProperties(current ?? "").Apply(changes);
+        if (changes.Count == 0) return current ?? "";
+        var oldPort = profile.Port;
+        SaveConfiguration("server.properties", updated);
+        try
+        {
+            if (changes.TryGetValue("server-port", out var port)) { profile.Port = int.Parse(port); store.Save(); }
+        }
+        catch (Exception saveError)
+        {
+            profile.Port = oldPort;
+            try { if (current == null) File.Delete(path); else SafeFiles.AtomicWrite(path, current); }
+            catch (Exception rollbackError) { throw new AggregateException("ポート設定の保存と復旧に失敗しました。file-historyを確認してください。", saveError, rollbackError); }
+            throw;
+        }
+        return updated;
+    }
     public string SavePreset(string name)
     {
         Stopped(); var dest = SafeFiles.Inside(store.PresetDir(profile), name + ".zip");

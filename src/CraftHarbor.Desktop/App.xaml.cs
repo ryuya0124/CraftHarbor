@@ -23,6 +23,7 @@ public partial class App : Application
             {
                 loading.ContentRendered -= rendered;
                 await loading.LoadAsync(() => Task.Run(() => new HarborStore(root)));
+                if (MainWindow is MainWindow main) main.BeginUpdateChecks();
             };
             loading.ContentRendered += rendered;
             loading.Show();
