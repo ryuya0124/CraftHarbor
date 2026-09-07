@@ -1,0 +1,58 @@
+param([string]$Version = '0.1.6')
+$ErrorActionPreference = 'Stop'
+$projectRoot = Split-Path $PSScriptRoot -Parent
+$setup = Join-Path $projectRoot "artifacts\packages\CraftHarbor-$Version-win-x64-setup.exe"
+$key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3AF1289-728F-4FB3-A791-EC7DDD897C14}_is1'
+if (Test-Path -LiteralPath $key) { throw 'CraftHarbor is already installed; run this test on a clean user account.' }
+$testId = [guid]::NewGuid().ToString('N')
+$testDirectory = Join-Path $projectRoot "artifacts\installer-test-$testId"
+$group = "CraftHarbor Installer Test $testId"
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) "$group\CraftHarbor.lnk"
+$dataDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CraftHarbor\data'
+New-Item -ItemType Directory -Force -Path $testDirectory, $dataDirectory | Out-Null
+$marker = Join-Path $dataDirectory "installer-preserve-$testId.txt"
+Set-Content -LiteralPath $marker -Value $testId
+$profilePath = Join-Path $dataDirectory 'profiles.json'
+$profileHash = if (Test-Path -LiteralPath $profilePath) { (Get-FileHash -LiteralPath $profilePath).Hash } else { $null }
+$javaBefore = @(Get-Process -Name java,javaw -ErrorAction SilentlyContinue | ForEach-Object { @{ Id = $_.Id; StartTime = $_.StartTime } })
+function InvokeInstaller([string]$File, [string[]]$Options) {
+    $process = Start-Process -FilePath $File -ArgumentList (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-') + $Options) -WindowStyle Hidden -Wait -PassThru
+    return $process.ExitCode
+}
+function CheckData {
+    if ((Get-Content -LiteralPath $marker -Raw).Trim() -ne $testId) { throw 'Server data marker changed' }
+    if ($profileHash -and (Get-FileHash -LiteralPath $profilePath).Hash -ne $profileHash) { throw 'Existing profiles changed' }
+}
+$installOptions = @('/LANG=japanese', ('/DIR="{0}"' -f $testDirectory), ('/GROUP="{0}"' -f $group))
+$created = $false
+$mutex = [Threading.Mutex]::new($false, 'Local\CraftHarbor.Desktop', [ref]$created)
+if (-not $created) { $mutex.Dispose(); throw 'CraftHarbor is running; the installer test cannot continue.' }
+try {
+    if ((InvokeInstaller $setup $installOptions) -eq 0) { throw 'Installer ignored running-app mutex' }
+    if (Test-Path -LiteralPath $key) { throw 'Blocked install registered an application' }
+} finally { $mutex.Dispose() }
+Write-Output 'PASS running-app install refusal (no process terminated)'
+for ($pass = 0; $pass -lt 2; $pass++) {
+    if ((InvokeInstaller $setup ($installOptions + ('/LOG="{0}"' -f (Join-Path $testDirectory "install-$pass.log")))) -ne 0) { throw 'Install/upgrade failed' }
+    $installed = Get-ItemProperty -LiteralPath $key
+    if ($installed.DisplayVersion -ne $Version) { throw 'Uninstall registration version mismatch' }
+    $shell = New-Object -ComObject WScript.Shell
+    if ($shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $testDirectory 'CraftHarbor.exe')) { throw 'Start menu target mismatch' }
+    CheckData
+    Write-Output "PASS install/upgrade $pass, Start menu and uninstall registration, data preserved"
+}
+$uninstaller = Join-Path $testDirectory 'unins000.exe'
+$mutex = [Threading.Mutex]::new($false, 'Local\CraftHarbor.Desktop')
+try {
+    if ((InvokeInstaller $uninstaller @()) -eq 0) { throw 'Uninstaller ignored running-app mutex' }
+    if (-not (Test-Path -LiteralPath (Join-Path $testDirectory 'CraftHarbor.exe'))) { throw 'Blocked uninstall removed app' }
+} finally { $mutex.Dispose() }
+Write-Output 'PASS running-app uninstall refusal (no process terminated)'
+if ((InvokeInstaller $uninstaller @(('/LOG="{0}"' -f (Join-Path $testDirectory 'uninstall.log')))) -ne 0) { throw 'Uninstall failed' }
+if ((Test-Path -LiteralPath $key) -or (Test-Path -LiteralPath $shortcut) -or (Test-Path -LiteralPath (Join-Path $testDirectory 'CraftHarbor.exe'))) { throw 'Uninstall left registered application or shortcut' }
+CheckData
+foreach ($original in $javaBefore) {
+    if ((Get-Process -Id $original.Id).StartTime -ne $original.StartTime) { throw 'Original Java process changed' }
+}
+Remove-Item -LiteralPath $marker
+Write-Output 'PASS uninstall removes app/shortcuts/registration and preserves server data and original Java processes'

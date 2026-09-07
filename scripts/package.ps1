@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.5')
+param([string]$Version = '0.1.6', [switch]$WithInstaller)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Push-Location $projectRoot
@@ -19,7 +19,12 @@ try {
         $zipPath = Join-Path $packageRoot "CraftHarbor-$Version-win-x64-$kind.zip"
         Compress-Archive -Path (Join-Path $target '*') -DestinationPath $zipPath -Force
     }
-    $hashLines = Get-ChildItem -LiteralPath $packageRoot -Filter "CraftHarbor-$Version-*.zip" | ForEach-Object {
+    if ($WithInstaller) {
+        $compiler = & (Join-Path $PSScriptRoot 'setup-installer-compiler.ps1')
+        & $compiler "/DAppVersion=$Version" (Join-Path $projectRoot 'installer\CraftHarbor.iss')
+        if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+    }
+    $hashLines = Get-ChildItem -LiteralPath $packageRoot -Filter "CraftHarbor-$Version-*" | Where-Object { $_.Extension -in '.zip', '.exe' } | ForEach-Object {
         $digest = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
         '{0}  {1}' -f $digest.Hash.ToLowerInvariant(), $_.Name
     }
